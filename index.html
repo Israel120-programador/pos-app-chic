@@ -16,6 +16,8 @@
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     <link rel="stylesheet" href="css/styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
 <body>
@@ -83,6 +85,10 @@
                 <li class="nav-item" data-section="daily-sales">
                     <span class="nav-icon">📅</span>
                     <span class="nav-text">Ventas Diarias</span>
+                </li>
+                <li class="nav-item" data-section="kitchen" data-kitchen-only="true">
+                    <span class="nav-icon">👨‍🍳</span>
+                    <span class="nav-text">Cocina</span>
                 </li>
                 <li class="nav-item" data-section="customers" data-admin-only="true">
                     <span class="nav-icon">👥</span>
@@ -350,6 +356,51 @@
                             <!-- Daily sales loaded here -->
                         </tbody>
                     </table>
+                </div>
+            </section>
+
+            <!-- Kitchen Section -->
+            <section id="kitchen-section" class="section">
+                <div class="section-header">
+                    <h1>👨‍🍳 Cocina - Pedidos</h1>
+                    <div class="header-actions">
+                        <span class="kitchen-status" id="kitchen-status">
+                            <span class="status-dot connected"></span>
+                            <span>Conectado</span>
+                        </span>
+                        <button class="btn btn-secondary" onclick="Kitchen.refresh()">↻ Actualizar</button>
+                    </div>
+                </div>
+
+                <div class="kitchen-stats">
+                    <div class="stat-card">
+                        <span class="stat-icon">🔴</span>
+                        <div class="stat-info">
+                            <span class="stat-value" id="pending-orders-count">0</span>
+                            <span class="stat-label">Pendientes</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon">🟡</span>
+                        <div class="stat-info">
+                            <span class="stat-value" id="preparing-orders-count">0</span>
+                            <span class="stat-label">Preparando</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon">🟢</span>
+                        <div class="stat-info">
+                            <span class="stat-value" id="ready-orders-count">0</span>
+                            <span class="stat-label">Listos</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="kitchen-orders-grid" id="kitchen-orders-grid">
+                    <div class="kitchen-empty">
+                        <span>👨‍🍳</span>
+                        <p>No hay pedidos pendientes</p>
+                    </div>
                 </div>
             </section>
 
@@ -904,6 +955,8 @@
     <!-- Scripts -->
     <script src="js/utils.js"></script>
     <script src="js/db.js"></script>
+    <script src="js/supabase.js"></script>
+    <script src="js/kitchen.js"></script>
     <script src="js/receipts.js"></script>
     <script src="js/pos.js"></script>
     <script src="js/products.js"></script>

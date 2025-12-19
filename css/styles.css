@@ -2398,3 +2398,187 @@ body {
         justify-content: flex-end;
     }
 }
+
+/* =====================================================
+   KITCHEN SECTION STYLES
+   ===================================================== */
+.kitchen-stats {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+    flex-wrap: wrap;
+}
+
+.kitchen-stats .stat-card {
+    flex: 1;
+    min-width: 120px;
+}
+
+.kitchen-status {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--text-muted);
+}
+
+.status-dot.connected {
+    background: var(--accent-success);
+    animation: pulse 2s infinite;
+}
+
+.kitchen-orders-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--spacing-md);
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.kitchen-empty {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-xl);
+    color: var(--text-muted);
+}
+
+.kitchen-empty span {
+    font-size: 64px;
+    margin-bottom: var(--spacing-md);
+}
+
+.kitchen-order-card {
+    background: var(--bg-card);
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-md);
+    border-left: 4px solid var(--text-muted);
+    animation: slideIn 0.3s ease;
+}
+
+.kitchen-order-card.status-pending {
+    border-left-color: var(--accent-danger);
+    animation: pulse-border 2s infinite;
+}
+
+.kitchen-order-card.status-preparing {
+    border-left-color: var(--accent-warning);
+}
+
+.kitchen-order-card.status-ready {
+    border-left-color: var(--accent-success);
+}
+
+@keyframes pulse-border {
+
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.4);
+    }
+
+    50% {
+        box-shadow: 0 0 0 10px rgba(255, 71, 87, 0);
+    }
+}
+
+.kitchen-order-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-sm);
+}
+
+.order-folio {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--accent-primary);
+}
+
+.order-time {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+}
+
+.kitchen-order-status {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    margin-bottom: var(--spacing-md);
+}
+
+.kitchen-order-items {
+    margin-bottom: var(--spacing-md);
+}
+
+.kitchen-order-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-xs) 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.kitchen-order-item:last-child {
+    border-bottom: none;
+}
+
+.item-qty {
+    background: var(--bg-tertiary);
+    padding: 2px 8px;
+    border-radius: var(--border-radius-sm);
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+}
+
+.item-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.item-notes {
+    font-size: var(--font-size-xs);
+    color: var(--accent-secondary);
+}
+
+.kitchen-order-comments {
+    background: var(--bg-tertiary);
+    padding: var(--spacing-sm);
+    border-radius: var(--border-radius-sm);
+    font-size: var(--font-size-sm);
+    color: var(--accent-secondary);
+    margin-bottom: var(--spacing-md);
+}
+
+.kitchen-order-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+}
+
+.kitchen-order-actions .btn {
+    flex: 1;
+}
+
+/* Mobile Kitchen */
+@media (max-width: 768px) {
+    .kitchen-orders-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .kitchen-stats {
+        flex-direction: row;
+    }
+
+    .kitchen-stats .stat-card {
+        flex: 1;
+        min-width: auto;
+    }
+}

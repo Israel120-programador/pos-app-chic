@@ -11,6 +11,20 @@ const App = {
             // Initialize database
             await DB.init();
 
+            // Initialize Supabase (if available)
+            if (typeof SupabaseDB !== 'undefined') {
+                const supabaseReady = SupabaseDB.init();
+                if (supabaseReady) {
+                    console.log('☁️ Supabase conectado - modo cloud');
+                    // Check if we should migrate local data
+                    const hasCloudData = await SupabaseDB.hasCloudData();
+                    if (!hasCloudData) {
+                        console.log('📤 Migrando datos locales a la nube...');
+                        await SupabaseDB.migrateFromLocalStorage();
+                    }
+                }
+            }
+
             // Register service worker
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('/sw.js').catch(() => { });
@@ -30,6 +44,11 @@ const App = {
                 Users.init(),
                 Settings.init()
             ]);
+
+            // Initialize Kitchen module
+            if (typeof Kitchen !== 'undefined') {
+                await Kitchen.init();
+            }
 
             // Setup navigation
             this.setupNavigation();
@@ -139,11 +158,23 @@ const App = {
 
     updateNavVisibility() {
         const isAdmin = this.currentUser && this.currentUser.role === 'admin';
+        const isKitchen = this.currentUser && this.currentUser.role === 'kitchen';
+        const isCashier = this.currentUser && this.currentUser.role === 'cashier';
 
         // Show/hide admin-only nav items
         document.querySelectorAll('.nav-item[data-admin-only="true"]').forEach(item => {
             item.style.display = isAdmin ? '' : 'none';
         });
+
+        // Show/hide kitchen-only nav items
+        document.querySelectorAll('.nav-item[data-kitchen-only="true"]').forEach(item => {
+            item.style.display = (isAdmin || isKitchen) ? '' : 'none';
+        });
+
+        // For kitchen users, auto-navigate to kitchen section
+        if (isKitchen) {
+            this.navigateTo('kitchen');
+        }
     },
 
     navigateTo(section) {
@@ -170,6 +201,10 @@ const App = {
             Inventory.loadStockList();
         } else if (section === 'daily-sales') {
             Sales.loadDailySales();
+        } else if (section === 'kitchen') {
+            if (typeof Kitchen !== 'undefined') {
+                Kitchen.loadOrders();
+            }
         }
     },
 
@@ -241,6 +276,24 @@ const App = {
     },
 
     async validatePin(pin) {
+        // Try Supabase first
+        if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getClient()) {
+            try {
+                const user = await SupabaseDB.getUserByPin(pin);
+                if (user) {
+                    return {
+                        id: user.id,
+                        name: user.name,
+                        role: user.role,
+                        pin: user.pin,
+                        is_active: user.active
+                    };
+                }
+            } catch (e) {
+                console.log('Supabase auth fallback to local:', e);
+            }
+        }
+        // Fallback to local DB
         const users = await DB.getAll('users');
         return users.find(u => u.pin === pin && u.is_active);
     },
