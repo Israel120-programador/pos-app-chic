@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="description" content="Sistema de Punto de Venta - POS App">
+
+    <title>POS - Punto de Venta</title>
+
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="stylesheet" href="css/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <!-- Splash Screen -->
+    <div id="splash-screen" class="splash-screen">
+        <div class="splash-content">
+            <div class="splash-logo">🍔</div>
+            <h1>POS App</h1>
+            <div class="splash-loader"></div>
+        </div>
+    </div>
+
+    <!-- Login Screen -->
+    <div id="login-screen" class="login-screen hidden">
+        <div class="login-container">
+            <div class="login-logo">🍔</div>
+            <h1>POS App</h1>
+            <p class="login-subtitle">Ingresa tu PIN para continuar</p>
+            <div class="pin-display">
+                <span class="pin-dot"></span>
+                <span class="pin-dot"></span>
+                <span class="pin-dot"></span>
+                <span class="pin-dot"></span>
+            </div>
+            <div class="pin-pad">
+                <button class="pin-btn" data-digit="1">1</button>
+                <button class="pin-btn" data-digit="2">2</button>
+                <button class="pin-btn" data-digit="3">3</button>
+                <button class="pin-btn" data-digit="4">4</button>
+                <button class="pin-btn" data-digit="5">5</button>
+                <button class="pin-btn" data-digit="6">6</button>
+                <button class="pin-btn" data-digit="7">7</button>
+                <button class="pin-btn" data-digit="8">8</button>
+                <button class="pin-btn" data-digit="9">9</button>
+                <button class="pin-btn pin-btn-clear" data-action="clear">C</button>
+                <button class="pin-btn" data-digit="0">0</button>
+                <button class="pin-btn pin-btn-back" data-action="back">⌫</button>
+            </div>
+            <p class="login-error hidden">PIN incorrecto</p>
+        </div>
+    </div>
+
+    <!-- Main App Container -->
+    <div id="app" class="app-container hidden">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">🍔</div>
+                <span class="logo-text">POS App</span>
+            </div>
+
+            <ul class="nav-menu">
+                <li class="nav-item active" data-section="pos">
+                    <span class="nav-icon">🛒</span>
+                    <span class="nav-text">Ventas</span>
+                </li>
+                <li class="nav-item" data-section="inventory-setup" data-admin-only="true">
+                    <span class="nav-icon">📦</span>
+                    <span class="nav-text">Gestión Inv.</span>
+                </li>
+                <li class="nav-item" data-section="sales-history" data-admin-only="true">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-text">Flujo del Negocio</span>
+                </li>
+                <li class="nav-item" data-section="daily-sales">
+                    <span class="nav-icon">📅</span>
+                    <span class="nav-text">Ventas Diarias</span>
+                </li>
+                <li class="nav-item" data-section="customers" data-admin-only="true">
+                    <span class="nav-icon">👥</span>
+                    <span class="nav-text">Clientes</span>
+                </li>
+                <li class="nav-item" data-section="users" data-admin-only="true">
+                    <span class="nav-icon">👤</span>
+                    <span class="nav-text">Usuarios</span>
+                </li>
+                <li class="nav-item" data-section="settings" data-admin-only="true">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-text">Ajustes</span>
+                </li>
+            </ul>
+
+            <div class="sidebar-footer">
+                <div class="sync-status" id="sync-status">
+                    <span class="sync-icon">🟢</span>
+                    <span class="sync-text">Sincronizado</span>
+                </div>
+                <button class="logout-btn" id="logout-btn">
+                    <span>🚪</span> Cerrar Sesión
+                </button>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- POS Section -->
+            <section id="pos-section" class="section active">
+                <div class="pos-container">
+                    <!-- Products Grid -->
+                    <div class="pos-products">
+                        <div class="pos-header">
+                            <div class="category-tabs" id="category-tabs">
+                                <button class="category-tab active" data-category="all">Todos</button>
+                            </div>
+                            <div class="search-box">
+                                <input type="text" id="product-search" placeholder="Buscar producto...">
+                                <span class="search-icon">🔍</span>
+                            </div>
+                        </div>
+                        <div class="products-grid" id="pos-products-grid">
+                            <!-- Products will be loaded here -->
+                        </div>
+                    </div>
+
+                    <!-- Cart -->
+                    <div class="pos-cart">
+                        <div class="cart-header">
+                            <h2>🛒 Orden Actual</h2>
+                            <button class="clear-cart-btn" id="clear-cart">Limpiar</button>
+                        </div>
+                        <div class="cart-items" id="cart-items">
+                            <div class="cart-empty">
+                                <span>🛒</span>
+                                <p>Carrito vacío</p>
+                            </div>
+                        </div>
+                        <div class="cart-summary">
+                            <div class="summary-row">
+                                <span>Subtotal</span>
+                                <span id="cart-subtotal">$0</span>
+                            </div>
+                            <div class="summary-row">
+                                <span>IVA (19%)</span>
+                                <span id="cart-tax">$0</span>
+                            </div>
+                            <div class="summary-row total">
+                                <span>Total</span>
+                                <span id="cart-total">$0</span>
+                            </div>
+                        </div>
+                        <div class="cart-actions">
+                            <button class="btn btn-secondary" id="hold-order">Apartar</button>
+                            <button class="btn btn-primary" id="process-payment">💳 Pagar</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Unified Inventory & Products Section -->
+            <section id="inventory-setup-section" class="section">
+                <div class="section-header">
+                    <h1>🏭 Gestión de Inventario</h1>
+                    <div class="header-tabs">
+                        <button class="nav-tab active" data-tab="products-tab">Catálogo</button>
+                        <button class="nav-tab" data-tab="categories-tab">Categorías</button>
+                    </div>
+
+                    <!-- TAB 1: Products Catalog -->
+                    <div id="products-tab" class="tab-content active">
+                        <div class="tab-header-actions">
+                            <div class="filters-bar">
+                                <input type="text" id="products-search" placeholder="Buscar productos..."
+                                    class="search-input">
+                                <select id="products-category-filter" class="select-input">
+                                    <option value="">Todas las categorías</option>
+                                </select>
+                            </div>
+                            <div class="actions-group">
+                                <button class="btn btn-warning hidden" id="undo-import-btn">↩️ Deshacer</button>
+                                <label for="import-products-file" class="btn btn-secondary btn-icon"
+                                    title="Importar Excel">📤</label>
+                                <input type="file" id="import-products-file" accept=".csv" style="display: none;">
+                                <button class="btn btn-secondary btn-icon" id="export-products-btn"
+                                    title="Exportar">📥</button>
+                                <button class="btn btn-primary" id="add-product-btn">+ Nuevo Producto</button>
+                            </div>
+                        </div>
+
+                        <div class="table-container">
+                            <table class="data-table" id="products-table">
+                                <thead>
+                                    <tr>
+                                        <th>Producto</th>
+                                        <th>Categoría</th>
+                                        <th>Precio</th>
+                                        <th>Costo</th>
+                                        <th>Stock</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="products-tbody">
+                                </tbody>
+                            </table>
+                            <div class="pagination-controls" id="products-pagination">
+                                <button class="btn btn-secondary btn-sm" id="load-more-products">Cargar más...</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 2: Categories Management -->
+                    <div id="categories-tab" class="tab-content">
+                        <div class="tab-header-actions">
+                            <div class="filters-bar">
+                                <span class="text-muted">Gestiona las categorías de tus productos</span>
+                            </div>
+                            <div class="actions-group">
+                                <button class="btn btn-primary" id="add-category-btn">+ Nueva Categoría</button>
+                            </div>
+                        </div>
+                        <div class="categories-grid" id="categories-grid">
+                            <!-- Categories loaded dynamically -->
+                        </div>
+
+                        <!-- Category Products Panel (Slide-in) -->
+                        <div id="category-products-panel" class="category-products-panel hidden">
+                            <div class="panel-header">
+                                <h3 id="category-products-title">Productos de Categoría</h3>
+                                <button class="btn btn-sm btn-secondary" id="close-category-products">✖️ Cerrar</button>
+                            </div>
+                            <div class="products-grid" id="category-products-grid">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 3: Stats -->
+            </section>
+
+            <!-- Sales History Section (Admin Dashboard) -->
+            <section id="sales-history-section" class="section">
+                <div class="section-header">
+                    <h1>📊 Flujo del Negocio</h1>
+                    <div class="date-filters">
+                        <input type="date" id="sales-date-from" class="date-input">
+                        <span>a</span>
+                        <input type="date" id="sales-date-to" class="date-input">
+                        <button class="btn btn-secondary" id="filter-sales">Filtrar</button>
+                    </div>
+                </div>
+
+                <!-- Interactive Stats Dashboard -->
+                <div class="sales-stats" id="sales-stats">
+                    <div class="stat-card clickable" onclick="Sales.openMonthlyStats()">
+                        <span class="stat-icon">💰</span>
+                        <div class="stat-info">
+                            <span class="stat-value" id="total-sales-value">$0</span>
+                            <span class="stat-label">Ventas Totales (Ver Mes)</span>
+                        </div>
+                    </div>
+                    <div class="stat-card clickable" onclick="Sales.openDailyTransactions()">
+                        <span class="stat-icon">🧾</span>
+                        <div class="stat-info">
+                            <span class="stat-value" id="total-transactions">0</span>
+                            <span class="stat-label">Transacciones (Ver Día)</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon">📈</span>
+                        <div class="stat-info">
+                            <span class="stat-value" id="average-sale">$0</span>
+                            <span class="stat-label">Promedio por Venta</span>
+                        </div>
+                    </div>
+                    <div class="stat-card" style="border-left: 4px solid #e74c3c;">
+                        <span class="stat-icon">📦</span>
+                        <div class="stat-info">
+                            <span class="stat-value" id="total-costs" style="color:#e74c3c;">$0</span>
+                            <span class="stat-label">Costo Total</span>
+                        </div>
+                    </div>
+                    <div class="stat-card" style="border-left: 4px solid #27ae60;">
+                        <span class="stat-icon">📊</span>
+                        <div class="stat-info">
+                            <span class="stat-value" id="total-profit" style="color:#27ae60;">$0</span>
+                            <span class="stat-label">Ganancia Neta</span>
+                        </div>
+                    </div>
+                    <div class="stat-card" style="border-left: 4px solid #3498db;">
+                        <span class="stat-icon">📉</span>
+                        <div class="stat-info">
+                            <span class="stat-value" id="profit-margin">0%</span>
+                            <span class="stat-label">Margen</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="inventory-stats" id="inventory-stats" style="margin-bottom: 20px;">
+                    <div class="stat-card clickable" onclick="Inventory.openLowStockModal()">
+                        <span class="stat-icon">⚠️</span>
+                        <div class="stat-info">
+                            <span class="stat-value" id="low-stock-count">0</span>
+                            <span class="stat-label">Stock Bajo (Ver Lista)</span>
+                        </div>
+                    </div>
+                    <div class="stat-card clickable" onclick="Sales.openItemsSoldModal()">
+                        <span class="stat-icon">🛒</span>
+                        <div class="stat-info">
+                            <span class="stat-value" id="total-items-sold">0</span>
+                            <span class="stat-label">Items Vendidos (Ver Lista)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts (Kept as visual aid) -->
+                <div class="inventory-grid" style="margin-bottom: 20px;">
+                    <div class="inventory-card chart-card" style="width:100%">
+                        <h3>🏆 Top Productos</h3>
+                        <canvas id="top-products-chart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Daily Sales Section (Common User) -->
+            <section id="daily-sales-section" class="section">
+                <div class="section-header">
+                    <h1>📅 Ventas del Día</h1>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" onclick="Sales.loadDailySales()">↻ Actualizar</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="data-table" id="daily-sales-table">
+                        <thead>
+                            <tr>
+                                <th>Hora</th>
+                                <th>Folio</th>
+                                <th>Total</th>
+                                <th>Método</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="daily-sales-tbody">
+                            <!-- Daily sales loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Customers Section -->
+            <section id="customers-section" class="section">
+                <div class="section-header">
+                    <h1>👥 Clientes</h1>
+                    <button class="btn btn-primary" id="add-customer-btn">+ Nuevo Cliente</button>
+                </div>
+                <div class="filters-bar">
+                    <input type="text" id="customers-search" placeholder="Buscar cliente..." class="search-input">
+                </div>
+                <div class="table-container">
+                    <table class="data-table" id="customers-table">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Teléfono</th>
+                                <th>Email</th>
+                                <th>Puntos</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="customers-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Users Section -->
+            <section id="users-section" class="section">
+                <div class="section-header">
+                    <h1>👤 Usuarios</h1>
+                    <button class="btn btn-primary" id="add-user-btn">+ Nuevo Usuario</button>
+                </div>
+                <div class="table-container">
+                    <table class="data-table" id="users-table">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Rol</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Settings Section -->
+            <section id="settings-section" class="section">
+                <div class="section-header">
+                    <h1>⚙️ Configuración</h1>
+                </div>
+                <div class="settings-container">
+                    <div class="settings-card">
+                        <h3>🏪 Datos del Negocio</h3>
+                        <div class="form-group">
+                            <label>Nombre del Negocio</label>
+                            <input type="text" id="setting-business-name" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label>RUT</label>
+                            <input type="text" id="setting-rut" class="form-input" placeholder="12.345.678-9">
+                        </div>
+                        <div class="form-group">
+                            <label>Dirección</label>
+                            <input type="text" id="setting-address" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label>Giro</label>
+                            <input type="text" id="setting-giro" class="form-input" placeholder="Venta de alimentos">
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <h3>💰 Impuestos</h3>
+                        <div class="form-group">
+                            <label>Tasa IVA (%)</label>
+                            <input type="number" id="setting-tax-rate" class="form-input" value="19">
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <h3>🖨️ Impresión</h3>
+                        <div class="form-group checkbox-group">
+                            <label>
+                                <input type="checkbox" id="setting-print-receipts" checked>
+                                Imprimir boletas automáticamente
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>Mensaje en boleta</label>
+                            <textarea id="setting-receipt-footer" class="form-input"
+                                rows="2">¡Gracias por su compra!</textarea>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <h3>📱 Dispositivo</h3>
+                        <div class="form-group">
+                            <label>ID Dispositivo</label>
+                            <input type="text" id="setting-device-id" class="form-input" readonly>
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <label>
+                                <input type="checkbox" id="setting-offline-mode">
+                                Modo Offline
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <h3>📶 Bluetooth</h3>
+                        <p class="text-muted mb-2">Conecta lectores de código de barras e impresoras térmicas.
+                        </p>
+                        <div class="bluetooth-devices" id="bluetooth-devices">
+                            <div class="bluetooth-status" id="bluetooth-status">
+                                <span class="status-indicator disconnected"></span>
+                                <span>Sin dispositivos conectados</span>
+                            </div>
+                        </div>
+                        <div class="form-actions mt-2">
+                            <button class="btn btn-secondary" id="scan-bluetooth">🔍 Buscar
+                                Dispositivos</button>
+                            <button class="btn btn-secondary" id="test-print">🖨️ Imprimir Prueba</button>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary" id="save-settings">💾 Guardar Cambios</button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <!-- Payment Modal -->
+    <div id="payment-modal" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2>💳 Procesar Pago</h2>
+                <button class="modal-close" data-modal="payment-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="payment-summary">
+                    <div class="payment-total">
+                        <span>Total a Pagar</span>
+                        <span id="payment-total-amount">$0</span>
+                    </div>
+                </div>
+                <div class="payment-methods">
+                    <h3>Selecciona método de pago</h3>
+                    <div class="payment-options">
+                        <button class="payment-option active" data-method="cash">
+                            <span class="payment-icon">💵</span>
+                            <span>Efectivo</span>
+                        </button>
+                        <button class="payment-option" data-method="card">
+                            <span class="payment-icon">💳</span>
+                            <span>Tarjeta</span>
+                        </button>
+                        <button class="payment-option" data-method="transfer">
+                            <span class="payment-icon">📲</span>
+                            <span>Transferencia</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="cash-payment-section" id="cash-payment-section">
+                    <div class="form-group">
+                        <label>Monto Recibido</label>
+                        <input type="number" id="cash-received" class="form-input large-input" placeholder="0">
+                    </div>
+                    <div class="quick-amounts">
+                        <button class="quick-amount" data-amount="1000">$1.000</button>
+                        <button class="quick-amount" data-amount="2000">$2.000</button>
+                        <button class="quick-amount" data-amount="5000">$5.000</button>
+                        <button class="quick-amount" data-amount="10000">$10.000</button>
+                        <button class="quick-amount" data-amount="20000">$20.000</button>
+                    </div>
+                    <div class="change-display">
+                        <span>Vuelto:</span>
+                        <span id="change-amount">$0</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Comentarios (opcional)</label>
+                    <textarea id="payment-comments" class="form-input" rows="2"
+                        placeholder="Notas para la cocina..."></textarea>
+                </div>
+                <!-- Payment Proof Image Upload -->
+                <div class="form-group"
+                    style="margin-top: 10px; border-top: 1px dashed var(--border-color); padding-top: 10px;">
+                    <label>📸 Comprobante / Imagen (Opcional)</label>
+                    <div class="image-upload-container">
+                        <input type="file" id="payment-proof-image" accept="image/*" class="hidden">
+                        <button type="button" class="btn btn-secondary btn-sm"
+                            onclick="document.getElementById('payment-proof-image').click()">Subir Foto</button>
+                        <span id="payment-proof-status" class="text-muted ml-2" style="font-size: 0.9em;">Sin
+                            archivo</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-modal="payment-modal">Cancelar</button>
+                <button class="btn btn-primary" id="confirm-payment">✓ Confirmar Pago</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Product Modal -->
+    <div id="product-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="product-modal-title">Nuevo Producto</h2>
+                <button class="modal-close" data-modal="product-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="product-form">
+                    <input type="hidden" id="product-id">
+                    <div class="form-group">
+                        <label>Nombre *</label>
+                        <input type="text" id="product-name" class="form-input" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Precio *</label>
+                            <input type="number" id="product-price" class="form-input" required min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Costo</label>
+                            <input type="number" id="product-cost" class="form-input" min="0">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Categoría</label>
+                            <select id="product-category" class="form-input"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Stock</label>
+                            <input type="number" id="product-stock" class="form-input" min="0">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>📷 Imagen del Producto</label>
+                        <div class="image-upload-container">
+                            <img id="product-image-preview" class="image-preview" src="" alt="Vista previa">
+                            <label for="product-image" class="btn btn-secondary"
+                                style="cursor: pointer; text-align: center;">
+                                📷 Seleccionar Foto
+                            </label>
+                            <input type="file" id="product-image" accept="image/*" style="display: none;">
+                            <button type="button" class="btn btn-danger btn-sm" id="clear-product-image">🗑️
+                                Quitar</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Código de Barras</label>
+                        <input type="text" id="product-barcode" class="form-input"
+                            placeholder="Escanea o ingresa código">
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <label>
+                            <input type="checkbox" id="product-active" checked>
+                            Producto activo
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-modal="product-modal">Cancelar</button>
+                <button class="btn btn-primary" id="save-product">💾 Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Modal -->
+    <div id="category-modal" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2 id="category-modal-title">Nueva Categoría</h2>
+                <button class="modal-close" data-modal="category-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="category-form">
+                    <input type="hidden" id="category-id">
+                    <div class="form-group">
+                        <label>Nombre *</label>
+                        <input type="text" id="category-name" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Categoría Padre (Opcional)</label>
+                        <select id="category-parent" class="form-input">
+                            <option value="">Ninguna (Categoría Raíz)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Color</label>
+                        <input type="color" id="category-color" class="form-input color-input" value="#FF6B35">
+                    </div>
+                    <div class="form-group">
+                        <label>Icono (emoji)</label>
+                        <input type="text" id="category-icon" class="form-input" placeholder="🍔" maxlength="2">
+                    </div>
+                    <div class="form-group">
+                        <label>Imagen (Opcional - Para Categoría Padre)</label>
+                        <div class="image-upload-container">
+                            <input type="file" id="category-image" accept="image/*" class="hidden">
+                            <button type="button" class="btn btn-secondary btn-sm"
+                                onclick="document.getElementById('category-image').click()">📷 Subir Imagen</button>
+                            <button type="button" class="btn btn-danger btn-sm hidden"
+                                id="clear-category-image">❌</button>
+                        </div>
+                        <img id="category-image-preview" class="image-preview mt-2">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-modal="category-modal">Cancelar</button>
+                <button class="btn btn-primary" id="save-category">💾 Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inventory Movement Modal -->
+    <div id="movement-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Nuevo Movimiento</h2>
+                <button class="modal-close" data-modal="movement-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="movement-form">
+                    <div class="form-group">
+                        <label>Producto *</label>
+                        <select id="movement-product" class="form-input" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Tipo de Movimiento *</label>
+                        <select id="movement-type" class="form-input" required>
+                            <option value="PURCHASE">Compra / Entrada</option>
+                            <option value="ADJUSTMENT">Ajuste</option>
+                            <option value="LOSS">Merma / Pérdida</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Cantidad *</label>
+                        <input type="number" id="movement-quantity" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Razón</label>
+                        <input type="text" id="movement-reason" class="form-input"
+                            placeholder="Descripción del movimiento">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-modal="movement-modal">Cancelar</button>
+                <button class="btn btn-primary" id="save-movement">💾 Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customer Modal -->
+    <div id="customer-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="customer-modal-title">Nuevo Cliente</h2>
+                <button class="modal-close" data-modal="customer-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="customer-form">
+                    <input type="hidden" id="customer-id">
+                    <div class="form-group">
+                        <label>Nombre *</label>
+                        <input type="text" id="customer-name" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Teléfono</label>
+                        <input type="tel" id="customer-phone" class="form-input" placeholder="+56 9 1234 5678">
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="customer-email" class="form-input">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-modal="customer-modal">Cancelar</button>
+                <button class="btn btn-primary" id="save-customer">💾 Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Modal -->
+    <div id="user-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="user-modal-title">Nuevo Usuario</h2>
+                <button class="modal-close" data-modal="user-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="user-form">
+                    <input type="hidden" id="user-id">
+                    <div class="form-group">
+                        <label>Nombre *</label>
+                        <input type="text" id="user-name" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Rol *</label>
+                        <select id="user-role" class="form-input" required>
+                            <option value="cashier">Cajero</option>
+                            <option value="admin">Administrador</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>PIN (4 dígitos) *</label>
+                        <input type="password" id="user-pin" class="form-input" maxlength="4" pattern="\d{4}" required>
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <label>
+                            <input type="checkbox" id="user-active" checked>
+                            Usuario activo
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-modal="user-modal">Cancelar</button>
+                <button class="btn btn-primary" id="save-user">💾 Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Auth Modal -->
+    <div id="admin-auth-modal" class="modal">
+        <div class="modal-content" style="max-width: 350px;">
+            <div class="modal-header">
+                <h2>🔐 Acceso Restringido</h2>
+                <button class="modal-close" data-modal="admin-auth-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="text-align:center; margin-bottom:15px; color:var(--text-secondary);">Ingrese PIN
+                    de Administrador</p>
+                <div class="pin-display" id="admin-auth-dots">
+                    <div class="pin-dot"></div>
+                    <div class="pin-dot"></div>
+                    <div class="pin-dot"></div>
+                    <div class="pin-dot"></div>
+                </div>
+                <div class="pin-pad" id="admin-auth-pad">
+                    <button class="pin-btn" data-digit="1">1</button><button class="pin-btn"
+                        data-digit="2">2</button><button class="pin-btn" data-digit="3">3</button>
+                    <button class="pin-btn" data-digit="4">4</button><button class="pin-btn"
+                        data-digit="5">5</button><button class="pin-btn" data-digit="6">6</button>
+                    <button class="pin-btn" data-digit="7">7</button><button class="pin-btn"
+                        data-digit="8">8</button><button class="pin-btn" data-digit="9">9</button>
+                    <button class="pin-btn pin-btn-back" data-action="back">⌫</button><button class="pin-btn"
+                        data-digit="0">0</button><button class="pin-btn pin-btn-clear" data-action="clear">C</button>
+                </div>
+                <div class="login-error hidden" id="admin-auth-error">PIN Incorrecto</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sale Detail Modal -->
+    <div id="sale-detail-modal" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2>Detalle de Venta</h2>
+                <button class="modal-close" data-modal="sale-detail-modal">&times;</button>
+            </div>
+            <div class="modal-body" id="sale-detail-content">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="reprint-receipt">🖨️ Reimprimir</button>
+                <button class="btn btn-primary" data-modal="sale-detail-modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Modals -->
+    <!-- Monthly Stats Modal -->
+    <div id="monthly-stats-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📅 Desglose Mensual</h2>
+                <button class="modal-close" data-modal="monthly-stats-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Ventas</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="monthly-stats-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Items Sold Modal -->
+    <div id="items-sold-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🛒 Items Vendidos</h2>
+                <button class="modal-close" data-modal="items-sold-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th>Cant.</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="items-sold-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Low Stock Modal -->
+    <div id="low-stock-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>⚠️ Stock Bajo</h2>
+                <button class="modal-close" data-modal="low-stock-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="stock-list" id="modal-stock-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Receipt Preview (for printing) -->
+    <div id="receipt-container" class="receipt-container"></div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="js/utils.js"></script>
+    <script src="js/db.js"></script>
+    <script src="js/receipts.js"></script>
+    <script src="js/pos.js"></script>
+    <script src="js/products.js"></script>
+    <script src="js/categories.js"></script>
+    <script src="js/inventory.js"></script>
+    <script src="js/sales.js"></script>
+    <script src="js/customers.js"></script>
+    <script src="js/users.js"></script>
+    <script src="js/settings.js"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>

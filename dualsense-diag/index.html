@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TECNO-INGENIERO PRO: DualSense Diag</title>
+    <meta name="description" content="Asistente de diagnóstico para controladores DualSense basado en análisis de circuitos">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER -->
+        <header class="header">
+            <div class="header-title">
+                <svg class="icon icon-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+                <h1>TECNO-INGENIERO PRO: DualSense Diag</h1>
+            </div>
+            <p class="header-subtitle">Asistente de diagnóstico basado en diagrama BDM-0xx/Video Raptor</p>
+        </header>
+
+        <!-- ADVERTENCIA DE SEGURIDAD -->
+        <div class="alert alert-danger">
+            <div class="alert-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+            </div>
+            <div class="alert-content">
+                <h3 class="alert-title">¡Precaución Eléctrica!</h3>
+                <p class="alert-description">
+                    El PMIC DA9087 no entregará voltaje si la batería no está conectada y detectada. 
+                    No diagnosticar como "Muerto" sin probar con batería conocida.
+                </p>
+            </div>
+        </div>
+
+        <!-- BUSCADOR -->
+        <div class="search-container">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input 
+                type="text" 
+                id="searchInput" 
+                class="search-input" 
+                placeholder="Buscar componente (ej: 0.1, PMIC, USB)..."
+            >
+        </div>
+
+        <!-- FILTROS DE CRITICIDAD -->
+        <div class="filter-container">
+            <button class="filter-btn active" data-filter="all">Todos</button>
+            <button class="filter-btn" data-filter="Critical">
+                <span class="filter-dot critical"></span>Crítico
+            </button>
+            <button class="filter-btn" data-filter="High">
+                <span class="filter-dot high"></span>Alto
+            </button>
+            <button class="filter-btn" data-filter="Medium">
+                <span class="filter-dot medium"></span>Medio
+            </button>
+            <button class="filter-btn" data-filter="Low">
+                <span class="filter-dot low"></span>Bajo
+            </button>
+        </div>
+
+        <!-- LISTA DE COMPONENTES -->
+        <div id="componentsList" class="components-grid">
+            <!-- Los componentes se renderizan dinámicamente -->
+        </div>
+
+        <!-- CONTADOR -->
+        <div class="footer-info">
+            <span id="componentCount">4 componentes</span>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
