@@ -1,6 +1,6 @@
 {
-    "name": "POS App",
-    "short_name": "POS",
+    "name": "Chic321",
+    "short_name": "Chic321",
     "description": "Sistema de Punto de Venta",
     "start_url": "/index.html",
     "display": "standalone",
