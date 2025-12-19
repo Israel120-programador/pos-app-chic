@@ -2189,3 +2189,212 @@ body {
         width: 100%;
     }
 }
+
+/* =====================================================
+   MOBILE / TABLET SCROLL FIX
+   ===================================================== */
+@media (max-width: 1024px) {
+
+    /* Enable scrolling on body for mobile/tablet */
+    body {
+        overflow: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* App container should allow scrolling */
+    .app-container {
+        flex-direction: column;
+        height: auto;
+        min-height: 100vh;
+        overflow: visible;
+    }
+
+    /* Sidebar becomes horizontal nav on mobile */
+    .sidebar {
+        width: 100%;
+        flex-direction: row;
+        flex-wrap: wrap;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: var(--bg-secondary);
+    }
+
+    .sidebar-header {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border-bottom: none;
+    }
+
+    .nav-menu {
+        display: flex;
+        flex-wrap: wrap;
+        padding: var(--spacing-xs);
+        gap: var(--spacing-xs);
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .nav-item {
+        padding: var(--spacing-sm);
+        margin-bottom: 0;
+    }
+
+    .nav-text {
+        display: none;
+    }
+
+    .nav-icon {
+        font-size: 18px;
+    }
+
+    .sidebar-footer {
+        display: none;
+    }
+
+    /* Main content should scroll */
+    .main-content {
+        flex: 1;
+        overflow: visible;
+        min-height: 0;
+    }
+
+    /* Sections should scroll */
+    .section {
+        overflow: visible;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        height: auto;
+        min-height: calc(100vh - 80px);
+        padding: var(--spacing-md);
+    }
+
+    .section.active {
+        display: block;
+    }
+
+    /* POS container vertical layout on mobile */
+    .pos-container {
+        flex-direction: column;
+        overflow: visible;
+        height: auto;
+    }
+
+    .pos-products {
+        overflow: visible;
+        min-height: 300px;
+    }
+
+    .products-grid {
+        overflow: visible;
+        max-height: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Cart at bottom on mobile */
+    .pos-cart {
+        width: 100%;
+        max-height: none;
+        overflow: visible;
+        margin-top: var(--spacing-md);
+    }
+
+    .cart-items {
+        max-height: 250px;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Tables should scroll horizontally */
+    .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Section header wrap */
+    .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    /* Settings container scroll */
+    .settings-container {
+        overflow: visible;
+    }
+
+    /* Sales stats wrap */
+    .sales-stats {
+        flex-wrap: wrap;
+    }
+
+    .stat-card {
+        min-width: 140px;
+        flex: 1 1 calc(50% - var(--spacing-md));
+    }
+
+    /* Inventory grid scroll */
+    .inventory-grid {
+        overflow: visible;
+    }
+
+    /* Categories grid scroll */
+    .categories-grid {
+        overflow: visible;
+    }
+
+    /* Modal adjustments for mobile */
+    .modal-content {
+        max-height: 90vh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .modal-body {
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+/* Extra small devices (phones) */
+@media (max-width: 480px) {
+    .pos-header {
+        flex-direction: column;
+    }
+
+    .search-box {
+        width: 100%;
+        min-width: auto;
+    }
+
+    .category-tabs {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        flex-wrap: nowrap;
+        padding-bottom: var(--spacing-sm);
+    }
+
+    .stat-card {
+        flex: 1 1 100%;
+    }
+
+    .cart-actions {
+        flex-direction: column;
+    }
+
+    .cart-actions .btn {
+        width: 100%;
+    }
+
+    .tab-header-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .actions-group {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+}
