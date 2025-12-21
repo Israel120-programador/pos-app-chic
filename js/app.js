@@ -331,9 +331,9 @@ const App = {
         // Clear saved session
         localStorage.removeItem('pos_current_user');
         document.getElementById('app').classList.add('hidden');
-        document.getElementById('login-screen').classList.remove('hidden');
-        document.querySelectorAll('.pin-dot').forEach(d => d.classList.remove('filled'));
-        Utils.showToast('Sesión cerrada', 'info');
+        // Show login and reset PIN display
+        this.showLogin();
+        Utils.showToast('Sesión cerrada. Ingresa nuevo PIN.', 'info');
     },
 
     async seedDemoData() {

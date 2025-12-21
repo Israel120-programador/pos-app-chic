@@ -1682,7 +1682,7 @@ body {
 .mobile-logout-btn {
     display: none;
     position: fixed;
-    top: 10px;
+    top: 60px;
     right: 10px;
     z-index: 200;
     background: var(--accent-danger);
