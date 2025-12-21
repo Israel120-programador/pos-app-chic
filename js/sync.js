@@ -69,23 +69,40 @@ const Sync = {
 
     updateStatusIndicator(status) {
         const statusEl = document.getElementById('sync-status');
+        const manualBtn = document.getElementById('sync-manual-btn');
         if (!statusEl) return;
 
         const icon = statusEl.querySelector('.sync-icon');
         const text = statusEl.querySelector('.sync-text');
 
+        // Always show manual sync button if it exists
+        if (manualBtn) manualBtn.classList.remove('hidden');
+
         if (status === 'syncing') {
             icon.textContent = '🔄';
             text.textContent = 'Sincronizando...';
-        } else if (!this.isOnline) {
-            icon.textContent = '🔴';
-            text.textContent = 'Sin conexión';
-        } else if (this.isSupabaseReady()) {
-            icon.textContent = '🟢';
-            text.textContent = 'Sincronizado';
+            if (manualBtn) {
+                manualBtn.innerHTML = '🔄 ...';
+                manualBtn.disabled = true;
+                manualBtn.style.opacity = '0.7';
+            }
         } else {
-            icon.textContent = '🟡';
-            text.textContent = 'Solo local';
+            if (manualBtn) {
+                manualBtn.innerHTML = '↻ Sincronizar Ahora';
+                manualBtn.disabled = false;
+                manualBtn.style.opacity = '1';
+            }
+
+            if (!this.isOnline) {
+                icon.textContent = '🔴';
+                text.textContent = 'Sin conexión';
+            } else if (this.isSupabaseReady()) {
+                icon.textContent = '🟢';
+                text.textContent = 'Sincronizado';
+            } else {
+                icon.textContent = '🟡';
+                text.textContent = 'Solo local';
+            }
         }
     },
 
