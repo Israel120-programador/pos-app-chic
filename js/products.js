@@ -794,7 +794,13 @@ const Products = {
 
             const cats = await DB.getAll('categories');
             const catMap = Object.fromEntries(cats.map(c => [c.name.toLowerCase(), c.id]));
+
+            // Cache products once instead of querying each iteration
+            const existingProducts = await DB.getAll('products');
+            const productsByName = Object.fromEntries(existingProducts.map(p => [p.name.toLowerCase(), p]));
+
             let imp = 0, upd = 0;
+            const productsToSync = [];
 
             for (const line of lines.slice(1)) {
                 const f = this.parseCSVLine(line);
@@ -802,8 +808,7 @@ const Products = {
                 const g = (i) => i >= 0 && f[i] ? f[i].replace(/^"|"$/g, '').trim() : '';
                 const nm = g(col.n); if (!nm) continue;
 
-                const prods = await DB.getAll('products');
-                const ex = prods.find(p => p.name.toLowerCase() === nm.toLowerCase());
+                const ex = productsByName[nm.toLowerCase()];
 
                 const prod = {
                     id: ex?.id || 'prod_' + Utils.generateUUID(),
@@ -814,12 +819,23 @@ const Products = {
                 };
 
                 await DB.put('products', prod);
-                if (typeof Sync !== 'undefined') await Sync.pushToCloud('products', ex ? 'UPDATE' : 'CREATE', prod);
+                productsToSync.push({ prod, isUpdate: !!ex });
                 ex ? upd++ : imp++;
             }
 
             await this.loadProducts(); POS.loadProducts(); Inventory.loadAll(); this.showUndoButton();
             Utils.showToast('OK: ' + imp + ' nuevos, ' + upd + ' actualizados', 'success');
+
+            // Sync to cloud in background (non-blocking)
+            if (typeof Sync !== 'undefined' && productsToSync.length > 0) {
+                Utils.showToast('Sincronizando ' + productsToSync.length + ' productos...', 'info');
+                setTimeout(async () => {
+                    for (const { prod, isUpdate } of productsToSync) {
+                        await Sync.pushToCloud('products', isUpdate ? 'UPDATE' : 'CREATE', prod);
+                    }
+                    Utils.showToast('Sync completado', 'success');
+                }, 100);
+            }
         } catch (e) { Utils.showToast('Error: ' + e.message, 'error'); }
     }
 };
