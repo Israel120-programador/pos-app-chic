@@ -707,7 +707,16 @@ const Products = {
 
         } catch (error) {
             console.error('Google Sheets import error:', error);
-            Utils.showToast('❌ Error: ' + error.message, 'error');
+            let errorMsg = error.message;
+
+            if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                errorMsg = 'Error de red. Verifica tu conexión.';
+            } else if (error.message.includes('403') || error.message.includes('401')) {
+                errorMsg = 'Archivo no público. Compartir → Cualquiera con enlace';
+            }
+
+            Utils.showToast('❌ ' + errorMsg, 'error');
+            alert('Error:\\n' + errorMsg + '\\n\\nEl archivo debe estar compartido como público.');
         }
     }
 };
