@@ -13,6 +13,11 @@ const Sync = {
         window.addEventListener('online', () => this.handleOnline());
         window.addEventListener('offline', () => this.handleOffline());
 
+        // Manual sync button
+        document.getElementById('sync-manual-btn')?.addEventListener('click', () => {
+            this.manualSync();
+        });
+
         // Initial sync if online
         if (this.isOnline && this.isSupabaseReady()) {
             await this.initialSync();
@@ -20,6 +25,22 @@ const Sync = {
         }
 
         this.updateStatusIndicator();
+    },
+
+    async manualSync() {
+        if (!this.isOnline) {
+            Utils.showToast('No hay conexión a internet', 'error');
+            return;
+        }
+
+        const btn = document.getElementById('sync-manual-btn');
+        if (btn) btn.innerHTML = '↻ Sincronizando...';
+
+        await this.initialSync();
+        await this.processRetryQueue();
+
+        if (btn) btn.innerHTML = '↻ Sincronizar Ahora';
+        Utils.showToast('Sincronización completada', 'success');
     },
 
     isSupabaseReady() {
