@@ -59,6 +59,9 @@ const Products = {
 
         // Google Sheets import
         document.getElementById('import-googlesheets-btn')?.addEventListener('click', () => this.promptGoogleSheetsImport());
+
+        // Paste CSV directly
+        document.getElementById('paste-csv-btn')?.addEventListener('click', () => this.promptPasteCSV());
     },
 
     async loadProducts() {
@@ -762,5 +765,61 @@ const Products = {
             Utils.showToast('❌ ' + errorMsg, 'error');
             alert('Error:\\n' + errorMsg + '\\n\\nEl archivo debe estar compartido como público.');
         }
+    },
+
+    async promptPasteCSV() {
+        const csvData = prompt('Pega los datos de Google Sheet aqui (Selecciona todo, copia, pega)');
+        if (!csvData || csvData.trim().length < 5) return;
+        if (!confirm('Importar productos?')) return;
+
+        try {
+            Utils.showToast('Procesando...', 'info');
+            this.productsBackup = await DB.getAll('products');
+
+            let csvText = csvData.includes('\t')
+                ? csvData.split('\n').map(l => l.split('\t').join(',')).join('\n')
+                : csvData;
+
+            const lines = csvText.split('\n').filter(l => l.trim());
+            if (lines.length < 2) throw new Error('No hay datos');
+
+            const hdr = this.parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
+            const col = {
+                n: Math.max(hdr.findIndex(h => h.includes('nombre') || h.includes('producto')), 0),
+                c: hdr.findIndex(h => h.includes('categor')),
+                p: Math.max(hdr.findIndex(h => h.includes('precio')), 2),
+                co: hdr.findIndex(h => h.includes('costo')),
+                s: hdr.findIndex(h => h.includes('stock'))
+            };
+
+            const cats = await DB.getAll('categories');
+            const catMap = Object.fromEntries(cats.map(c => [c.name.toLowerCase(), c.id]));
+            let imp = 0, upd = 0;
+
+            for (const line of lines.slice(1)) {
+                const f = this.parseCSVLine(line);
+                if (f.length < 2) continue;
+                const g = (i) => i >= 0 && f[i] ? f[i].replace(/^"|"$/g, '').trim() : '';
+                const nm = g(col.n); if (!nm) continue;
+
+                const prods = await DB.getAll('products');
+                const ex = prods.find(p => p.name.toLowerCase() === nm.toLowerCase());
+
+                const prod = {
+                    id: ex?.id || 'prod_' + Utils.generateUUID(),
+                    name: nm, price: parseInt(g(col.p)) || 0, cost: parseInt(g(col.co)) || 0,
+                    category: catMap[g(col.c).toLowerCase()] || '', stock: parseInt(g(col.s)) || 0,
+                    is_active: true, tax_rate: 0.19, image: ex?.image || null,
+                    sync_status: 'PENDING', created_at: ex?.created_at || Utils.now(), updated_at: Utils.now()
+                };
+
+                await DB.put('products', prod);
+                if (typeof Sync !== 'undefined') await Sync.pushToCloud('products', ex ? 'UPDATE' : 'CREATE', prod);
+                ex ? upd++ : imp++;
+            }
+
+            await this.loadProducts(); POS.loadProducts(); Inventory.loadAll(); this.showUndoButton();
+            Utils.showToast('OK: ' + imp + ' nuevos, ' + upd + ' actualizados', 'success');
+        } catch (e) { Utils.showToast('Error: ' + e.message, 'error'); }
     }
 };
