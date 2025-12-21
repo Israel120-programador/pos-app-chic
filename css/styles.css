@@ -380,6 +380,8 @@ body {
 .sidebar-footer {
     padding: var(--spacing-md);
     border-top: 1px solid var(--border-color);
+    margin-top: auto;
+    /* Push to bottom */
 }
 
 .sync-status {
@@ -395,22 +397,25 @@ body {
 .logout-btn {
     width: 100%;
     padding: var(--spacing-md);
-    background: transparent;
-    border: 1px solid var(--border-color);
+    background: rgba(255, 71, 87, 0.1);
+    /* Red tint */
+    border: 1px solid var(--accent-danger);
     border-radius: var(--border-radius);
-    color: var(--text-secondary);
+    color: var(--accent-danger);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: var(--spacing-sm);
     transition: var(--transition-fast);
+    font-weight: 600;
 }
 
 .logout-btn:hover {
     background: var(--accent-danger);
-    border-color: var(--accent-danger);
-    color: var(--text-primary);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 71, 87, 0.3);
 }
 
 /* =====================================================

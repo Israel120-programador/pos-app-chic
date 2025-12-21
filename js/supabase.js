@@ -329,6 +329,57 @@ const SupabaseDB = {
     },
 
     // =====================================================
+    // GLOBAL SETTINGS
+    // =====================================================
+    async getSettings() {
+        // We assume a 'settings' table with a 'key' column. 
+        // We want the row where key = 'global'
+        const { data, error } = await supabaseClient
+            .from('settings')
+            .select('*')
+            .eq('key', 'global')
+            .single();
+
+        if (error) {
+            // If table doesn't exist or row missing, return null to use defaults
+            console.warn('Could not fetch global settings:', error.message);
+            return null;
+        }
+        return data?.value || null; // value column should hold the JSON
+    },
+
+    async updateSettings(settings) {
+        // Upsert the 'global' settings row
+        const { data, error } = await supabaseClient
+            .from('settings')
+            .upsert({
+                key: 'global',
+                value: settings,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'key' })
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    subscribeToSettings(callback) {
+        return supabaseClient
+            .channel('settings-channel')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'settings',
+                filter: 'key=eq.global'
+            }, (payload) => {
+                console.log('⚙️ Settings change:', payload);
+                callback(payload);
+            })
+            .subscribe();
+    },
+
+    // =====================================================
     // MIGRATION FROM LOCALSTORAGE
     // =====================================================
     async migrateFromLocalStorage() {

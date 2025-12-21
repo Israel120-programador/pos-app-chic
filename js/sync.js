@@ -119,6 +119,10 @@ const Sync = {
                     // Pull today's orders from Supabase
                     cloudData = await SupabaseDB.getTodayOrders();
                     break;
+                case 'settings':
+                    const settings = await SupabaseDB.getSettings();
+                    if (settings) cloudData = [settings];
+                    break;
             }
 
             // Transform cloud data to local format and save
@@ -163,299 +167,311 @@ const Sync = {
         }
 
         // Subscribe to orders
-        this.channels.orders = SupabaseDB.subscribeToOrders(async (payload) => {
-            console.log('🧾 Cambio en pedidos:', payload.eventType);
-            await this.handleRemoteChange('sales', payload);
-        });
+        console.log('🧾 Cambio en pedidos:', payload.eventType);
+        await this.handleRemoteChange('sales', payload);
+    });
 
-        console.log('📡 Suscripto a cambios en tiempo real');
+// Subscribe to settings
+this.channels.settings = SupabaseDB.subscribeToSettings(async (payload) => {
+    console.log('⚙️ Cambio en configuración:', payload.eventType);
+    await this.handleRemoteChange('settings', payload);
+});
+
+console.log('📡 Suscripto a cambios en tiempo real');
     },
 
     async handleRemoteChange(entityType, payload) {
-        const { eventType, new: newRecord, old: oldRecord } = payload;
+    const { eventType, new: newRecord, old: oldRecord } = payload;
 
-        switch (eventType) {
-            case 'INSERT':
-            case 'UPDATE':
-                if (newRecord) {
-                    const localItem = this.cloudToLocal(entityType, newRecord);
-                    await DB.put(entityType, localItem);
-                }
-                break;
+    switch (eventType) {
+        case 'INSERT':
+        case 'UPDATE':
+            if (newRecord) {
+                const localItem = this.cloudToLocal(entityType, newRecord);
+                await DB.put(entityType, localItem);
+            }
+            break;
 
-            case 'DELETE':
-                if (oldRecord) {
-                    await DB.delete(entityType, oldRecord.id);
-                }
-                break;
-        }
+        case 'DELETE':
+            if (oldRecord) {
+                await DB.delete(entityType, oldRecord.id);
+            }
+            break;
+    }
 
-        // Refresh UI based on entity type
-        this.refreshUI(entityType);
-    },
+    // Refresh UI based on entity type
+    this.refreshUI(entityType);
+},
 
-    refreshUI(entityType) {
-        switch (entityType) {
-            case 'products':
-                if (typeof Products !== 'undefined') Products.loadProducts();
-                if (typeof POS !== 'undefined') POS.loadProducts();
-                if (typeof Inventory !== 'undefined') Inventory.loadStockList();
-                break;
-            case 'categories':
-                if (typeof Categories !== 'undefined') Categories.loadCategories();
-                if (typeof POS !== 'undefined') POS.loadProducts();
-                break;
-            case 'users':
-                if (typeof Users !== 'undefined') Users.loadUsers();
-                break;
-            case 'sales':
-                if (typeof Sales !== 'undefined') Sales.loadSales();
-                break;
-        }
-    },
+refreshUI(entityType) {
+    switch (entityType) {
+        case 'products':
+            if (typeof Products !== 'undefined') Products.loadProducts();
+            if (typeof POS !== 'undefined') POS.loadProducts();
+            if (typeof Inventory !== 'undefined') Inventory.loadStockList();
+            break;
+        case 'categories':
+            if (typeof Categories !== 'undefined') Categories.loadCategories();
+            if (typeof POS !== 'undefined') POS.loadProducts();
+            break;
+        case 'users':
+            if (typeof Users !== 'undefined') Users.loadUsers();
+            break;
+        case 'sales':
+            if (typeof Sales !== 'undefined') Sales.loadSales();
+            break;
+        case 'settings':
+            if (typeof Settings !== 'undefined') Settings.loadSettings();
+            break;
+    }
+},
 
     // =====================================================
     // PUSH TO CLOUD - Save local changes to Supabase
     // =====================================================
     async pushToCloud(entityType, action, data) {
-        if (!this.isSupabaseReady() || !this.isOnline) {
-            // Queue for later sync
-            this.retryQueue.push({ entityType, action, data, timestamp: Date.now() });
-            console.log('📋 Cambio guardado para sincronizar después');
-            return false;
+    if (!this.isSupabaseReady() || !this.isOnline) {
+        // Queue for later sync
+        this.retryQueue.push({ entityType, action, data, timestamp: Date.now() });
+        console.log('📋 Cambio guardado para sincronizar después');
+        return false;
+    }
+
+    try {
+        const cloudData = this.localToCloud(entityType, data);
+
+        switch (entityType) {
+            case 'products':
+                if (action === 'DELETE') {
+                    await SupabaseDB.deleteProduct(data.id);
+                } else {
+                    // Upsert: try update, if fails try create
+                    try {
+                        await SupabaseDB.updateProduct(data.id, cloudData);
+                    } catch (e) {
+                        await SupabaseDB.createProduct(cloudData);
+                    }
+                }
+                break;
+
+            case 'categories':
+                if (action === 'DELETE') {
+                    await SupabaseDB.deleteCategory(data.id);
+                } else {
+                    try {
+                        await SupabaseDB.updateCategory(data.id, cloudData);
+                    } catch (e) {
+                        await SupabaseDB.createCategory(cloudData);
+                    }
+                }
+                break;
+
+            case 'users':
+                if (action === 'DELETE') {
+                    await SupabaseDB.deleteUser(data.id);
+                } else {
+                    try {
+                        await SupabaseDB.updateUser(data.id, cloudData);
+                    } catch (e) {
+                        await SupabaseDB.createUser(cloudData);
+                    }
+                }
+                break;
+
+            case 'sales':
+                if (action === 'DELETE') {
+                    // Orders typically aren't deleted, but if needed:
+                    // await SupabaseDB.deleteOrder(data.id);
+                } else {
+                    // Create order with items
+                    const orderData = cloudData.order;
+                    const orderItems = cloudData.items;
+                    await SupabaseDB.createOrder(orderData, orderItems);
+                }
+                break;
+
+            case 'settings':
+                await SupabaseDB.updateSettings(cloudData);
+                break;
         }
 
-        try {
-            const cloudData = this.localToCloud(entityType, data);
+        console.log(`☁️ ${entityType} sincronizado con la nube`);
+        return true;
 
-            switch (entityType) {
-                case 'products':
-                    if (action === 'DELETE') {
-                        await SupabaseDB.deleteProduct(data.id);
-                    } else {
-                        // Upsert: try update, if fails try create
-                        try {
-                            await SupabaseDB.updateProduct(data.id, cloudData);
-                        } catch (e) {
-                            await SupabaseDB.createProduct(cloudData);
-                        }
-                    }
-                    break;
-
-                case 'categories':
-                    if (action === 'DELETE') {
-                        await SupabaseDB.deleteCategory(data.id);
-                    } else {
-                        try {
-                            await SupabaseDB.updateCategory(data.id, cloudData);
-                        } catch (e) {
-                            await SupabaseDB.createCategory(cloudData);
-                        }
-                    }
-                    break;
-
-                case 'users':
-                    if (action === 'DELETE') {
-                        await SupabaseDB.deleteUser(data.id);
-                    } else {
-                        try {
-                            await SupabaseDB.updateUser(data.id, cloudData);
-                        } catch (e) {
-                            await SupabaseDB.createUser(cloudData);
-                        }
-                    }
-                    break;
-
-                case 'sales':
-                    if (action === 'DELETE') {
-                        // Orders typically aren't deleted, but if needed:
-                        // await SupabaseDB.deleteOrder(data.id);
-                    } else {
-                        // Create order with items
-                        const orderData = cloudData.order;
-                        const orderItems = cloudData.items;
-                        await SupabaseDB.createOrder(orderData, orderItems);
-                    }
-                    break;
-            }
-
-            console.log(`☁️ ${entityType} sincronizado con la nube`);
-            return true;
-
-        } catch (error) {
-            console.error(`Error sincronizando ${entityType}:`, error);
-            // Queue for retry
-            this.retryQueue.push({ entityType, action, data, timestamp: Date.now() });
-            return false;
-        }
-    },
+    } catch (error) {
+        console.error(`Error sincronizando ${entityType}:`, error);
+        // Queue for retry
+        this.retryQueue.push({ entityType, action, data, timestamp: Date.now() });
+        return false;
+    }
+},
 
     async processRetryQueue() {
-        if (this.retryQueue.length === 0) return;
+    if (this.retryQueue.length === 0) return;
 
-        console.log(`🔄 Procesando ${this.retryQueue.length} cambios pendientes...`);
+    console.log(`🔄 Procesando ${this.retryQueue.length} cambios pendientes...`);
 
-        const queue = [...this.retryQueue];
-        this.retryQueue = [];
+    const queue = [...this.retryQueue];
+    this.retryQueue = [];
 
-        for (const item of queue) {
-            const success = await this.pushToCloud(item.entityType, item.action, item.data);
-            if (!success) {
-                // Will be re-added to queue by pushToCloud
-            }
+    for (const item of queue) {
+        const success = await this.pushToCloud(item.entityType, item.action, item.data);
+        if (!success) {
+            // Will be re-added to queue by pushToCloud
         }
-    },
-
-    // =====================================================
-    // DATA TRANSFORMATION
-    // =====================================================
-    cloudToLocal(entityType, cloudData) {
-        // Transform Supabase format to local format
-        switch (entityType) {
-            case 'products':
-                return {
-                    id: cloudData.id,
-                    name: cloudData.name,
-                    price: cloudData.price,
-                    cost: cloudData.cost || 0,
-                    category: cloudData.category_id,
-                    stock: cloudData.stock,
-                    barcode: cloudData.barcode,
-                    image: cloudData.image,
-                    is_active: cloudData.active !== false,
-                    tax_rate: 0.19,
-                    sync_status: 'SYNCED',
-                    created_at: cloudData.created_at,
-                    updated_at: cloudData.updated_at || cloudData.created_at
-                };
-
-            case 'categories':
-                return {
-                    id: cloudData.id,
-                    name: cloudData.name,
-                    color: cloudData.color || '#FF6B35',
-                    icon: cloudData.icon || '📦',
-                    image: cloudData.image,
-                    parent_id: cloudData.parent_id,
-                    created_at: cloudData.created_at
-                };
-
-            case 'users':
-                return {
-                    id: cloudData.id,
-                    name: cloudData.name,
-                    pin: cloudData.pin,
-                    role: cloudData.role || 'cashier',
-                    is_active: cloudData.active !== false,
-                    created_at: cloudData.created_at
-                };
-
-            case 'sales':
-                // Transform Supabase order to local sale format
-                return {
-                    id: cloudData.id,
-                    order_number: cloudData.folio,
-                    timestamp: cloudData.created_at,
-                    total: cloudData.total,
-                    subtotal: cloudData.subtotal,
-                    tax: cloudData.tax,
-                    payment_method: cloudData.payment_method,
-                    customer_id: cloudData.customer_id,
-                    cashier_id: cloudData.user_id,
-                    device_id: 'cloud',
-                    items: (cloudData.order_items || []).map(item => ({
-                        product_id: item.product_id,
-                        product_name: item.products?.name || 'Producto',
-                        quantity: item.quantity,
-                        unit_price: item.unit_price,
-                        subtotal: item.total,
-                        modifiers: []
-                    })),
-                    comments: cloudData.notes || '',
-                    status: cloudData.status,
-                    sync_status: 'SYNCED',
-                    created_at_local: cloudData.created_at
-                };
-
-            default:
-                return cloudData;
-        }
-    },
-
-    localToCloud(entityType, localData) {
-        // Transform local format to Supabase format
-        switch (entityType) {
-            case 'products':
-                return {
-                    id: localData.id,
-                    name: localData.name,
-                    price: localData.price,
-                    cost: localData.cost || 0,
-                    category_id: localData.category || null,
-                    stock: localData.stock,
-                    barcode: localData.barcode || null,
-                    image: localData.image || null,
-                    active: localData.is_active !== false
-                };
-
-            case 'categories':
-                return {
-                    id: localData.id,
-                    name: localData.name,
-                    color: localData.color || '#FF6B35',
-                    icon: localData.icon || '📦',
-                    image: localData.image || null,
-                    parent_id: localData.parent_id || null
-                };
-
-            case 'users':
-                return {
-                    id: localData.id,
-                    name: localData.name,
-                    pin: localData.pin,
-                    role: localData.role || 'cashier',
-                    active: localData.is_active !== false
-                };
-
-            case 'sales':
-                // Transform local sale to Supabase order format
-                return {
-                    order: {
-                        id: localData.id,
-                        folio: localData.order_number,
-                        user_id: localData.cashier_id,
-                        customer_id: localData.customer_id,
-                        total: localData.total,
-                        subtotal: localData.subtotal,
-                        tax: localData.tax,
-                        payment_method: localData.payment_method,
-                        status: localData.status || 'completed',
-                        notes: localData.comments || null,
-                        created_at: localData.timestamp
-                    },
-                    items: (localData.items || []).map(item => ({
-                        product_id: item.product_id,
-                        quantity: item.quantity,
-                        unit_price: item.unit_price,
-                        total: item.subtotal,
-                        notes: null
-                    }))
-                };
-
-            default:
-                return localData;
-        }
-    },
-
-    // =====================================================
-    // CLEANUP
-    // =====================================================
-    unsubscribeAll() {
-        Object.values(this.channels).forEach(channel => {
-            SupabaseDB.unsubscribe(channel);
-        });
-        this.channels = {};
     }
+},
+
+// =====================================================
+// DATA TRANSFORMATION
+// =====================================================
+cloudToLocal(entityType, cloudData) {
+    // Transform Supabase format to local format
+    switch (entityType) {
+        case 'products':
+            return {
+                id: cloudData.id,
+                name: cloudData.name,
+                price: cloudData.price,
+                cost: cloudData.cost || 0,
+                category: cloudData.category_id,
+                stock: cloudData.stock,
+                barcode: cloudData.barcode,
+                image: cloudData.image,
+                is_active: cloudData.active !== false,
+                tax_rate: 0.19,
+                sync_status: 'SYNCED',
+                created_at: cloudData.created_at,
+                updated_at: cloudData.updated_at || cloudData.created_at
+            };
+
+        case 'categories':
+            return {
+                id: cloudData.id,
+                name: cloudData.name,
+                color: cloudData.color || '#FF6B35',
+                icon: cloudData.icon || '📦',
+                image: cloudData.image,
+                parent_id: cloudData.parent_id,
+                created_at: cloudData.created_at
+            };
+
+        case 'users':
+            return {
+                id: cloudData.id,
+                name: cloudData.name,
+                pin: cloudData.pin,
+                role: cloudData.role || 'cashier',
+                is_active: cloudData.active !== false,
+                created_at: cloudData.created_at
+            };
+
+        case 'sales':
+            // Transform Supabase order to local sale format
+            return {
+                id: cloudData.id,
+                order_number: cloudData.folio,
+                timestamp: cloudData.created_at,
+                total: cloudData.total,
+                subtotal: cloudData.subtotal,
+                tax: cloudData.tax,
+                payment_method: cloudData.payment_method,
+                customer_id: cloudData.customer_id,
+                cashier_id: cloudData.user_id,
+                device_id: 'cloud',
+                items: (cloudData.order_items || []).map(item => ({
+                    product_id: item.product_id,
+                    product_name: item.products?.name || 'Producto',
+                    quantity: item.quantity,
+                    unit_price: item.unit_price,
+                    subtotal: item.total,
+                    modifiers: []
+                })),
+                comments: cloudData.notes || '',
+                status: cloudData.status,
+                sync_status: 'SYNCED',
+                created_at_local: cloudData.created_at
+            };
+
+        default:
+            return cloudData;
+    }
+},
+
+localToCloud(entityType, localData) {
+    // Transform local format to Supabase format
+    switch (entityType) {
+        case 'products':
+            return {
+                id: localData.id,
+                name: localData.name,
+                price: localData.price,
+                cost: localData.cost || 0,
+                category_id: localData.category || null,
+                stock: localData.stock,
+                barcode: localData.barcode || null,
+                image: localData.image || null,
+                active: localData.is_active !== false
+            };
+
+        case 'categories':
+            return {
+                id: localData.id,
+                name: localData.name,
+                color: localData.color || '#FF6B35',
+                icon: localData.icon || '📦',
+                image: localData.image || null,
+                parent_id: localData.parent_id || null
+            };
+
+        case 'users':
+            return {
+                id: localData.id,
+                name: localData.name,
+                pin: localData.pin,
+                role: localData.role || 'cashier',
+                active: localData.is_active !== false
+            };
+
+        case 'sales':
+            // Transform local sale to Supabase order format
+            return {
+                order: {
+                    id: localData.id,
+                    folio: localData.order_number,
+                    user_id: localData.cashier_id,
+                    customer_id: localData.customer_id,
+                    total: localData.total,
+                    subtotal: localData.subtotal,
+                    tax: localData.tax,
+                    payment_method: localData.payment_method,
+                    status: localData.status || 'completed',
+                    notes: localData.comments || null,
+                    created_at: localData.timestamp
+                },
+                items: (localData.items || []).map(item => ({
+                    product_id: item.product_id,
+                    quantity: item.quantity,
+                    unit_price: item.unit_price,
+                    total: item.subtotal,
+                    notes: null
+                }))
+            };
+
+        default:
+            return localData;
+    }
+},
+
+// =====================================================
+// CLEANUP
+// =====================================================
+unsubscribeAll() {
+    Object.values(this.channels).forEach(channel => {
+        SupabaseDB.unsubscribe(channel);
+    });
+    this.channels = {};
+}
 };
 
 // Make globally available

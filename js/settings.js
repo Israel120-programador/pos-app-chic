@@ -64,7 +64,13 @@ const Settings = {
         };
 
         await DB.put('settings', settings);
-        Utils.showToast('Configuración guardada', 'success');
+
+        // Push settings to cloud
+        if (typeof Sync !== 'undefined') {
+            await Sync.pushToCloud('settings', 'UPDATE', settings);
+        }
+
+        Utils.showToast('Configuración guardada y sincronizada', 'success');
     },
 
     async scanBluetooth() {
