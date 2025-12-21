@@ -603,12 +603,27 @@ const Products = {
         Utils.showToast('Descargando desde Google Sheets...', 'info');
 
         try {
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error('No se pudo descargar el archivo');
+            let csvText = '';
+
+            // Try direct fetch first
+            try {
+                const response = await fetch(url);
+                if (response.ok) {
+                    csvText = await response.text();
+                }
+            } catch (e) {
+                console.log('Direct fetch failed, trying CORS proxy...');
             }
 
-            const csvText = await response.text();
+            // If direct fetch failed, use CORS proxy
+            if (!csvText) {
+                const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
+                const response = await fetch(proxyUrl);
+                if (!response.ok) {
+                    throw new Error('No se pudo descargar el archivo');
+                }
+                csvText = await response.text();
+            }
 
             if (!csvText || csvText.trim().length === 0) {
                 throw new Error('El archivo está vacío');
