@@ -156,9 +156,11 @@ const POS = {
         }
 
         // Render Products as table when inside a category
-        // Products are shown if they belong to current category
+        // Only show products that have a category assigned
         let products = this.productsCache.filter(p => {
-            if (!parentId || parentId === 'all') return !p.category; // Orphans at root
+            // Skip products without category
+            if (!p.category || p.category === '') return false;
+            if (!parentId || parentId === 'all') return false; // At root, only show categories
             return p.category === parentId;
         });
 
