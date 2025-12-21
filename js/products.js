@@ -627,17 +627,37 @@ const Products = {
                     csvText = await response.text();
                 }
             } catch (e) {
-                console.log('Direct fetch failed, trying CORS proxy...');
+                console.log('Direct fetch failed, trying proxies...');
             }
 
-            // If direct fetch failed, use CORS proxy
+            // If direct fetch failed, try multiple CORS proxies
             if (!csvText) {
-                const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(csvUrl);
-                const response = await fetch(proxyUrl);
-                if (!response.ok) {
-                    throw new Error('No se pudo descargar el archivo');
+                const proxies = [
+                    'https://api.allorigins.win/raw?url=',
+                    'https://corsproxy.io/?',
+                    'https://api.codetabs.com/v1/proxy?quest='
+                ];
+
+                for (const proxy of proxies) {
+                    try {
+                        console.log('Trying proxy:', proxy);
+                        const proxyUrl = proxy + encodeURIComponent(csvUrl);
+                        const response = await fetch(proxyUrl);
+                        if (response.ok) {
+                            csvText = await response.text();
+                            if (csvText && csvText.trim().length > 0) {
+                                console.log('Success with proxy:', proxy);
+                                break;
+                            }
+                        }
+                    } catch (e) {
+                        console.log('Proxy failed:', proxy);
+                    }
                 }
-                csvText = await response.text();
+            }
+
+            if (!csvText || csvText.trim().length === 0) {
+                throw new Error('No se pudo descargar. Verifica que el archivo sea público.');
             }
 
             if (!csvText || csvText.trim().length === 0) {
