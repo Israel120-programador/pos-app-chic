@@ -95,6 +95,20 @@ const App = {
         });
 
         document.getElementById('logout-btn')?.addEventListener('click', () => this.logout());
+
+        // Mobile menu toggle
+        document.getElementById('menu-toggle')?.addEventListener('click', () => {
+            document.querySelector('.sidebar').classList.toggle('open');
+        });
+
+        // Mobile logout button
+        document.getElementById('mobile-logout-btn')?.addEventListener('click', () => this.logout());
+
+        // Close sidebar when clicking outside on mobile
+        document.querySelector('.main-content')?.addEventListener('click', (e) => {
+            if (e.target.closest('.mobile-header')) return;
+            document.querySelector('.sidebar')?.classList.remove('open');
+        });
     },
 
     handleNavigationRequest(section) {

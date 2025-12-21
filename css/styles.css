@@ -1675,7 +1675,63 @@ body {
 
     .section {
         padding: var(--spacing-md);
+        padding-top: 60px;
+        /* Space for mobile header */
     }
+}
+
+/* Mobile Header - Only visible on mobile */
+.mobile-header {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 50px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    z-index: 101;
+    padding: 0 var(--spacing-md);
+    align-items: center;
+    justify-content: space-between;
+}
+
+@media (max-width: 480px) {
+    .mobile-header {
+        display: flex;
+    }
+}
+
+.menu-toggle {
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 24px;
+    cursor: pointer;
+    padding: var(--spacing-sm);
+}
+
+.mobile-logo {
+    font-weight: 700;
+    font-size: var(--font-size-lg);
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.mobile-logout-btn {
+    background: var(--accent-danger);
+    border: none;
+    color: white;
+    font-size: 18px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+}
+
+.mobile-logout-btn:active {
+    transform: scale(0.95);
 }
 
 /* =====================================================
