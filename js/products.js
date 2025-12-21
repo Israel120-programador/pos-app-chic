@@ -600,6 +600,21 @@ const Products = {
             return;
         }
 
+        // Convert edit URL to CSV export URL automatically
+        let csvUrl = url;
+        if (url.includes('/edit')) {
+            // Extract spreadsheet ID and gid
+            const idMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+            const gidMatch = url.match(/gid=(\d+)/);
+
+            if (idMatch) {
+                const spreadsheetId = idMatch[1];
+                const gid = gidMatch ? gidMatch[1] : '0';
+                csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${gid}`;
+                console.log('Converted URL:', csvUrl);
+            }
+        }
+
         Utils.showToast('Descargando desde Google Sheets...', 'info');
 
         try {
@@ -607,7 +622,7 @@ const Products = {
 
             // Try direct fetch first
             try {
-                const response = await fetch(url);
+                const response = await fetch(csvUrl);
                 if (response.ok) {
                     csvText = await response.text();
                 }
@@ -617,7 +632,7 @@ const Products = {
 
             // If direct fetch failed, use CORS proxy
             if (!csvText) {
-                const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
+                const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(csvUrl);
                 const response = await fetch(proxyUrl);
                 if (!response.ok) {
                     throw new Error('No se pudo descargar el archivo');
