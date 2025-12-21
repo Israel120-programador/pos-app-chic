@@ -166,6 +166,12 @@ const Categories = {
         }
 
         await DB.put('categories', category);
+
+        // Sync with cloud
+        if (typeof Sync !== 'undefined') {
+            Sync.pushToCloud('categories', 'UPDATE', category);
+        }
+
         document.getElementById('category-modal').classList.remove('active');
         await this.loadCategories();
         POS.loadCategories();
@@ -176,6 +182,12 @@ const Categories = {
     async delete(id) {
         if (!confirm('¿Eliminar esta categoría?')) return;
         await DB.delete('categories', id);
+
+        // Sync with cloud
+        if (typeof Sync !== 'undefined') {
+            Sync.pushToCloud('categories', 'DELETE', { id });
+        }
+
         await this.loadCategories();
         POS.loadCategories();
         Utils.showToast('Categoría eliminada', 'success');

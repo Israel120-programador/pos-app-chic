@@ -10,6 +10,9 @@ const Products = {
     catMap: {},
     filteredList: [],
 
+    // Undo system for any action
+    lastAction: null, // { type: 'CREATE'|'UPDATE'|'DELETE', product: {...}, previousState: {...} }
+
     async init() {
         this.bindEvents();
         this.setupTabs();
@@ -39,6 +42,7 @@ const Products = {
         document.getElementById('export-products-btn')?.addEventListener('click', () => this.exportToExcel());
         document.getElementById('import-products-file')?.addEventListener('change', (e) => this.importFromCSV(e));
         document.getElementById('undo-import-btn')?.addEventListener('click', () => this.undoImport());
+        document.getElementById('undo-last-action-btn')?.addEventListener('click', () => this.undoLastAction());
         document.getElementById('view-saved-files-btn')?.addEventListener('click', () => this.viewSavedFiles());
         document.getElementById('products-search')?.addEventListener('input',
             Utils.debounce(() => this.filterProducts(), 300));
@@ -52,6 +56,9 @@ const Products = {
         // Image upload handlers
         document.getElementById('product-image')?.addEventListener('change', (e) => this.handleImageUpload(e));
         document.getElementById('clear-product-image')?.addEventListener('click', () => this.clearImage());
+
+        // Google Sheets import
+        document.getElementById('import-googlesheets-btn')?.addEventListener('click', () => this.promptGoogleSheetsImport());
     },
 
     async loadProducts() {
@@ -218,8 +225,20 @@ const Products = {
         if (!existing) product.created_at = Utils.now();
         if (existing && !this.currentImageData) product.image = existing.image;
 
+        // Save state for undo
+        this.lastAction = {
+            type: existing ? 'UPDATE' : 'CREATE',
+            product: { ...product },
+            previousState: existing ? { ...existing } : null
+        };
+        this.showUndoActionButton();
+
         await DB.put('products', product);
-        await DB.queueSync(existing ? 'UPDATE_PRODUCT' : 'CREATE_PRODUCT', 'products', id, product);
+
+        // Sync with cloud
+        if (typeof Sync !== 'undefined') {
+            Sync.pushToCloud('products', existing ? 'UPDATE' : 'CREATE', product);
+        }
 
         document.getElementById('product-modal').classList.remove('active');
         await this.loadProducts();
@@ -230,11 +249,98 @@ const Products = {
 
     async delete(id) {
         if (!confirm('¿Eliminar este producto?')) return;
+
+        // Save state for undo before deleting
+        const existing = await DB.get('products', id);
+        if (existing) {
+            this.lastAction = {
+                type: 'DELETE',
+                product: null,
+                previousState: { ...existing }
+            };
+            this.showUndoActionButton();
+        }
+
         await DB.delete('products', id);
-        await DB.queueSync('DELETE_PRODUCT', 'products', id, {});
+
+        // Sync with cloud
+        if (typeof Sync !== 'undefined') {
+            Sync.pushToCloud('products', 'DELETE', { id });
+        }
+
         await this.loadProducts();
         POS.loadProducts();
         Utils.showToast('Producto eliminado', 'success');
+    },
+
+    async undoLastAction() {
+        if (!this.lastAction) {
+            Utils.showToast('No hay acción para deshacer', 'warning');
+            return;
+        }
+
+        const action = this.lastAction;
+
+        try {
+            switch (action.type) {
+                case 'CREATE':
+                    // Undo create: delete the product
+                    if (action.product) {
+                        await DB.delete('products', action.product.id);
+                        Utils.showToast(`Creación de "${action.product.name}" deshecha`, 'success');
+                    }
+                    break;
+
+                case 'UPDATE':
+                    // Undo update: restore previous state
+                    if (action.previousState) {
+                        await DB.put('products', action.previousState);
+                        Utils.showToast(`Cambios en "${action.previousState.name}" deshechos`, 'success');
+                    }
+                    break;
+
+                case 'DELETE':
+                    // Undo delete: restore the product
+                    if (action.previousState) {
+                        await DB.put('products', action.previousState);
+                        Utils.showToast(`"${action.previousState.name}" restaurado`, 'success');
+                    }
+                    break;
+            }
+
+            // Clear last action and hide button
+            this.lastAction = null;
+            this.hideUndoActionButton();
+
+            // Refresh views
+            await this.loadProducts();
+            POS.loadProducts();
+            Inventory.loadStockList();
+
+        } catch (error) {
+            console.error('Undo error:', error);
+            Utils.showToast('Error al deshacer: ' + error.message, 'error');
+        }
+    },
+
+    showUndoActionButton() {
+        const btn = document.getElementById('undo-last-action-btn');
+        if (btn) {
+            btn.classList.remove('hidden');
+            // Auto-hide after 30 seconds
+            clearTimeout(this.undoTimeout);
+            this.undoTimeout = setTimeout(() => {
+                this.hideUndoActionButton();
+            }, 30000);
+        }
+    },
+
+    hideUndoActionButton() {
+        const btn = document.getElementById('undo-last-action-btn');
+        if (btn) {
+            btn.classList.add('hidden');
+        }
+        this.lastAction = null;
     },
 
     async exportToExcel() {
@@ -469,5 +575,109 @@ const Products = {
         link.download = file.filename;
         link.click();
         Utils.showToast(`Descargado: ${file.filename}`, 'success');
+    },
+
+    // =====================================================
+    // GOOGLE SHEETS IMPORT
+    // =====================================================
+    async promptGoogleSheetsImport() {
+        const url = prompt(
+            'Pega la URL pública de tu Google Sheet exportada como CSV:\n\n' +
+            'Instrucciones:\n' +
+            '1. En Google Sheets, ve a Archivo → Compartir → Publicar en la web\n' +
+            '2. Selecciona la hoja y formato "Valores separados por comas (.csv)"\n' +
+            '3. Copia la URL y pégala aquí'
+        );
+
+        if (!url) return;
+
+        if (!url.includes('docs.google.com') && !url.includes('.csv')) {
+            Utils.showToast('URL inválida. Debe ser una URL de Google Sheets publicada como CSV', 'error');
+            return;
+        }
+
+        if (!confirm('¿Importar productos desde Google Sheets?\n\nEsto actualizará los productos existentes.\n\nPodrás deshacer esta acción después.')) {
+            return;
+        }
+
+        Utils.showToast('Descargando desde Google Sheets...', 'info');
+
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error('No se pudo descargar el archivo');
+            }
+
+            const csvText = await response.text();
+
+            if (!csvText || csvText.trim().length === 0) {
+                throw new Error('El archivo está vacío');
+            }
+
+            this.productsBackup = await DB.getAll('products');
+            console.log('Backup created:', this.productsBackup.length, 'products');
+
+            const lines = csvText.split('\n').filter(line => line.trim());
+            if (lines.length < 2) {
+                throw new Error('Archivo CSV vacío o inválido');
+            }
+
+            const dataLines = lines.slice(1);
+            const categories = await DB.getAll('categories');
+            const catNameToId = Object.fromEntries(categories.map(c => [c.name.toLowerCase(), c.id]));
+
+            let imported = 0;
+            let updated = 0;
+
+            for (const line of dataLines) {
+                const fields = this.parseCSVLine(line);
+                if (fields.length < 6) continue;
+
+                const [name, categoryName, price, cost, , stock, barcode, active] = fields;
+                const cleanName = name.replace(/^"|"$/g, '').trim();
+                if (!cleanName) continue;
+
+                const products = await DB.getAll('products');
+                const existing = products.find(p => p.name.toLowerCase() === cleanName.toLowerCase());
+
+                const product = {
+                    id: existing?.id || 'prod_' + Utils.generateUUID(),
+                    name: cleanName,
+                    price: parseInt(price) || 0,
+                    cost: parseInt(cost) || 0,
+                    category: catNameToId[categoryName.replace(/^"|"$/g, '').toLowerCase()] || '',
+                    stock: parseInt(stock) || 0,
+                    barcode: barcode?.replace(/^"|"$/g, '') || '',
+                    is_active: active?.includes('Sí') ?? true,
+                    tax_rate: 0.19,
+                    image: existing?.image || null,
+                    sync_status: 'PENDING',
+                    created_at: existing?.created_at || Utils.now(),
+                    updated_at: Utils.now()
+                };
+
+                await DB.put('products', product);
+
+                // Sync with cloud - CAMBIOS SE SINCRONIZAN AUTOMÁTICAMENTE
+                if (typeof Sync !== 'undefined') {
+                    await Sync.pushToCloud('products', existing ? 'UPDATE' : 'CREATE', product);
+                }
+
+                if (existing) updated++;
+                else imported++;
+            }
+
+            await this.loadProducts();
+            POS.loadProducts();
+            Inventory.loadAll();
+
+            this.showUndoButton();
+
+            Utils.showToast(`✅ Google Sheets: ${imported} nuevos, ${updated} actualizados`, 'success');
+
+        } catch (error) {
+            console.error('Google Sheets import error:', error);
+            Utils.showToast('❌ Error: ' + error.message, 'error');
+        }
     }
 };

@@ -86,10 +86,6 @@
                     <span class="nav-icon">📅</span>
                     <span class="nav-text">Ventas Diarias</span>
                 </li>
-                <li class="nav-item" data-section="kitchen" data-kitchen-only="true">
-                    <span class="nav-icon">👨‍🍳</span>
-                    <span class="nav-text">Cocina</span>
-                </li>
                 <li class="nav-item" data-section="customers" data-admin-only="true">
                     <span class="nav-icon">👥</span>
                     <span class="nav-text">Clientes</span>
@@ -190,7 +186,11 @@
                                 </select>
                             </div>
                             <div class="actions-group">
-                                <button class="btn btn-warning hidden" id="undo-import-btn">↩️ Deshacer</button>
+                                <button class="btn btn-warning hidden" id="undo-last-action-btn"
+                                    title="Deshacer última acción">↩️ Deshacer</button>
+                                <button class="btn btn-warning hidden" id="undo-import-btn">↩️ Deshacer Import</button>
+                                <button class="btn btn-info" id="import-googlesheets-btn"
+                                    title="Importar desde Google Sheets">📊 Google Sheets</button>
                                 <label for="import-products-file" class="btn btn-secondary btn-icon"
                                     title="Importar Excel">📤</label>
                                 <input type="file" id="import-products-file" accept=".csv" style="display: none;">
@@ -359,51 +359,6 @@
                 </div>
             </section>
 
-            <!-- Kitchen Section -->
-            <section id="kitchen-section" class="section">
-                <div class="section-header">
-                    <h1>👨‍🍳 Cocina - Pedidos</h1>
-                    <div class="header-actions">
-                        <span class="kitchen-status" id="kitchen-status">
-                            <span class="status-dot connected"></span>
-                            <span>Conectado</span>
-                        </span>
-                        <button class="btn btn-secondary" onclick="Kitchen.refresh()">↻ Actualizar</button>
-                    </div>
-                </div>
-
-                <div class="kitchen-stats">
-                    <div class="stat-card">
-                        <span class="stat-icon">🔴</span>
-                        <div class="stat-info">
-                            <span class="stat-value" id="pending-orders-count">0</span>
-                            <span class="stat-label">Pendientes</span>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-icon">🟡</span>
-                        <div class="stat-info">
-                            <span class="stat-value" id="preparing-orders-count">0</span>
-                            <span class="stat-label">Preparando</span>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-icon">🟢</span>
-                        <div class="stat-info">
-                            <span class="stat-value" id="ready-orders-count">0</span>
-                            <span class="stat-label">Listos</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="kitchen-orders-grid" id="kitchen-orders-grid">
-                    <div class="kitchen-empty">
-                        <span>👨‍🍳</span>
-                        <p>No hay pedidos pendientes</p>
-                    </div>
-                </div>
-            </section>
-
             <!-- Customers Section -->
             <section id="customers-section" class="section">
                 <div class="section-header">
@@ -434,7 +389,12 @@
             <section id="users-section" class="section">
                 <div class="section-header">
                     <h1>👤 Usuarios</h1>
-                    <button class="btn btn-primary" id="add-user-btn">+ Nuevo Usuario</button>
+                    <div class="header-actions">
+                        <span class="unsaved-indicator hidden" id="users-unsaved-indicator">⚠️ Cambios sin
+                            guardar</span>
+                        <button class="btn btn-success hidden" id="save-users-btn">💾 Guardar Cambios</button>
+                        <button class="btn btn-primary" id="add-user-btn">+ Nuevo Usuario</button>
+                    </div>
                 </div>
                 <div class="table-container">
                     <table class="data-table" id="users-table">
@@ -956,7 +916,6 @@
     <script src="js/utils.js"></script>
     <script src="js/db.js"></script>
     <script src="js/supabase.js"></script>
-    <script src="js/kitchen.js"></script>
     <script src="js/receipts.js"></script>
     <script src="js/pos.js"></script>
     <script src="js/products.js"></script>
@@ -966,6 +925,7 @@
     <script src="js/customers.js"></script>
     <script src="js/users.js"></script>
     <script src="js/settings.js"></script>
+    <script src="js/sync.js"></script>
     <script src="js/app.js"></script>
 </body>
 

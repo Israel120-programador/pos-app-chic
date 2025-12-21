@@ -48,13 +48,33 @@ const Kitchen = {
     async loadOrders() {
         try {
             if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getClient()) {
+                // Load from Supabase (real-time cloud data)
                 this.orders = await SupabaseDB.getPendingOrders();
             } else {
-                // Fallback to localStorage
-                const allOrders = JSON.parse(localStorage.getItem('pos_orders') || '[]');
-                this.orders = allOrders.filter(o =>
-                    o.status === 'pending' || o.status === 'preparing'
-                );
+                // Fallback to local DB (IndexedDB/LocalStorage through DB module)
+                const allSales = await DB.getAll('sales');
+
+                // Filter for pending/preparing orders only
+                // Also check if sale has status field (new orders from sync)
+                this.orders = allSales
+                    .filter(sale => {
+                        // If has status field, filter by status
+                        if (sale.status) {
+                            return sale.status === 'pending' || sale.status === 'preparing';
+                        }
+                        // Old sales without status are considered completed
+                        return false;
+                    })
+                    .map(sale => ({
+                        id: sale.id,
+                        folio: sale.order_number,
+                        status: sale.status || 'pending',
+                        created_at: sale.timestamp,
+                        order_items: sale.items,
+                        items: sale.items, // Compatibility
+                        comments: sale.comments,
+                        user_id: sale.cashier_id
+                    }));
             }
             this.render();
             this.updateStats();
@@ -166,12 +186,12 @@ const Kitchen = {
             if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getClient()) {
                 await SupabaseDB.updateOrderStatus(orderId, 'preparing');
             } else {
-                // Local update
-                const orders = JSON.parse(localStorage.getItem('pos_orders') || '[]');
-                const order = orders.find(o => o.id === orderId);
-                if (order) {
-                    order.status = 'preparing';
-                    localStorage.setItem('pos_orders', JSON.stringify(orders));
+                // Local update using DB module
+                const sale = await DB.get('sales', orderId);
+                if (sale) {
+                    sale.status = 'preparing';
+                    sale.updated_at = Utils.now();
+                    await DB.put('sales', sale);
                 }
             }
 
@@ -188,13 +208,13 @@ const Kitchen = {
             if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getClient()) {
                 await SupabaseDB.updateOrderStatus(orderId, 'ready');
             } else {
-                // Local update
-                const orders = JSON.parse(localStorage.getItem('pos_orders') || '[]');
-                const order = orders.find(o => o.id === orderId);
-                if (order) {
-                    order.status = 'ready';
-                    order.ready_at = new Date().toISOString();
-                    localStorage.setItem('pos_orders', JSON.stringify(orders));
+                // Local update using DB module
+                const sale = await DB.get('sales', orderId);
+                if (sale) {
+                    sale.status = 'ready';
+                    sale.ready_at = Utils.now();
+                    sale.updated_at = Utils.now();
+                    await DB.put('sales', sale);
                 }
             }
 

@@ -426,6 +426,7 @@ const POS = {
             items: Utils.deepClone(this.cart),
             comments,
             proof_image: this.currentProofImage || null,
+            status: 'completed', // completed for finished sales
             sync_status: 'PENDING',
             created_at_local: Utils.now()
         };
@@ -433,6 +434,11 @@ const POS = {
         // Save sale
         await DB.add('sales', sale);
         await DB.queueSync('CREATE_SALE', 'sales', sale.id, sale);
+
+        // Sync with cloud immediately if online
+        if (typeof Sync !== 'undefined') {
+            await Sync.pushToCloud('sales', 'CREATE', sale);
+        }
 
         // Update stock
         for (const item of this.cart) {

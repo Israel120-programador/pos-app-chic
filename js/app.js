@@ -45,18 +45,38 @@ const App = {
                 Settings.init()
             ]);
 
-            // Initialize Kitchen module
-            if (typeof Kitchen !== 'undefined') {
-                await Kitchen.init();
+            // Initialize Sync module for real-time multi-device sync
+            if (typeof Sync !== 'undefined') {
+                await Sync.init();
             }
 
             // Setup navigation
             this.setupNavigation();
             this.setupModals();
 
-            // Hide splash and show login
-            setTimeout(() => {
+            // Hide splash and check for saved session
+            setTimeout(async () => {
                 document.getElementById('splash-screen').classList.add('hidden');
+
+                // Check for saved session
+                const savedUser = localStorage.getItem('pos_current_user');
+                if (savedUser) {
+                    try {
+                        this.currentUser = JSON.parse(savedUser);
+                        // Validate user still exists and is active
+                        const user = await this.validatePin(this.currentUser.pin);
+                        if (user) {
+                            this.currentUser = user;
+                            this.updateNavVisibility();
+                            document.getElementById('app').classList.remove('hidden');
+                            Utils.showToast(`Bienvenido de vuelta, ${user.name}`, 'success');
+                            return;
+                        }
+                    } catch (e) {
+                        console.log('Auto-login failed:', e);
+                    }
+                }
+
                 this.showLogin();
             }, 1000);
 
@@ -166,15 +186,10 @@ const App = {
             item.style.display = isAdmin ? '' : 'none';
         });
 
-        // Show/hide kitchen-only nav items
+        // Show/hide kitchen-only nav items (none now)
         document.querySelectorAll('.nav-item[data-kitchen-only="true"]').forEach(item => {
-            item.style.display = (isAdmin || isKitchen) ? '' : 'none';
+            item.style.display = 'none';
         });
-
-        // For kitchen users, auto-navigate to kitchen section
-        if (isKitchen) {
-            this.navigateTo('kitchen');
-        }
     },
 
     navigateTo(section) {
@@ -201,10 +216,6 @@ const App = {
             Inventory.loadStockList();
         } else if (section === 'daily-sales') {
             Sales.loadDailySales();
-        } else if (section === 'kitchen') {
-            if (typeof Kitchen !== 'undefined') {
-                Kitchen.loadOrders();
-            }
         }
     },
 
@@ -254,9 +265,12 @@ const App = {
                             const user = await this.validatePin(pin);
                             if (user) {
                                 this.currentUser = user;
+                                // Save session
+                                localStorage.setItem('pos_current_user', JSON.stringify(user));
                                 this.updateNavVisibility();
                                 document.getElementById('login-screen').classList.add('hidden');
                                 document.getElementById('app').classList.remove('hidden');
+                                Utils.showToast(`Bienvenido, ${user.name}`, 'success');
                             } else {
                                 error.classList.remove('hidden');
                                 pin = '';
@@ -300,9 +314,12 @@ const App = {
 
     logout() {
         this.currentUser = null;
+        // Clear saved session
+        localStorage.removeItem('pos_current_user');
         document.getElementById('app').classList.add('hidden');
         document.getElementById('login-screen').classList.remove('hidden');
         document.querySelectorAll('.pin-dot').forEach(d => d.classList.remove('filled'));
+        Utils.showToast('Sesión cerrada', 'info');
     },
 
     async seedDemoData() {

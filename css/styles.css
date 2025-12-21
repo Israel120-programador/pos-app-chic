@@ -2582,3 +2582,97 @@ body {
         min-width: auto;
     }
 }
+
+/* =====================================================
+   BADGES
+   ===================================================== */
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+}
+
+.badge-success {
+    background: rgba(0, 217, 165, 0.2);
+    color: var(--accent-success);
+}
+
+.badge-danger {
+    background: rgba(255, 71, 87, 0.2);
+    color: var(--accent-danger);
+}
+
+.badge-warning {
+    background: rgba(255, 184, 0, 0.2);
+    color: var(--accent-warning);
+}
+
+.badge-info {
+    background: rgba(78, 197, 241, 0.2);
+    color: var(--accent-secondary);
+}
+
+/* =====================================================
+   UNSAVED CHANGES INDICATOR
+   ===================================================== */
+.unsaved-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: rgba(255, 184, 0, 0.15);
+    color: var(--accent-warning);
+    border-radius: var(--border-radius-sm);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    animation: pulse-warning 2s infinite;
+}
+
+@keyframes pulse-warning {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.unsaved-indicator.hidden {
+    display: none;
+}
+
+/* =====================================================
+   PENDING CHANGES TABLE ROW
+   ===================================================== */
+.pending-change {
+    background: rgba(255, 184, 0, 0.1) !important;
+    border-left: 3px solid var(--accent-warning);
+}
+
+.pending-change td:first-child {
+    padding-left: calc(var(--spacing-md) - 3px);
+}
+
+/* Button Warning Style */
+.btn-warning {
+    background: var(--accent-warning);
+    color: #1a1a2e;
+}
+
+.btn-warning:hover {
+    background: #ffcc33;
+    transform: translateY(-1px);
+}
+
+/* Header Actions */
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    flex-wrap: wrap;
+}

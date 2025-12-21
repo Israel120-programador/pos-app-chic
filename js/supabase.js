@@ -294,6 +294,34 @@ const SupabaseDB = {
             .subscribe();
     },
 
+    subscribeToCategories(callback) {
+        return supabaseClient
+            .channel('categories-channel')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'categories'
+            }, (payload) => {
+                console.log('📁 Category change:', payload);
+                callback(payload);
+            })
+            .subscribe();
+    },
+
+    subscribeToUsers(callback) {
+        return supabaseClient
+            .channel('users-channel')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'users'
+            }, (payload) => {
+                console.log('👤 User change:', payload);
+                callback(payload);
+            })
+            .subscribe();
+    },
+
     unsubscribe(channel) {
         if (channel) {
             supabaseClient.removeChannel(channel);
