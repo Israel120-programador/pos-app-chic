@@ -45,9 +45,9 @@ const App = {
                 Settings.init()
             ]);
 
-            // Initialize Sync module for real-time multi-device sync
+            // Defer Sync to background after app loads (faster startup)
             if (typeof Sync !== 'undefined') {
-                await Sync.init();
+                setTimeout(() => Sync.init(), 2000); // Start sync 2 seconds after load
             }
 
             // Setup navigation
