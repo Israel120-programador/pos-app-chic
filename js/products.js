@@ -652,6 +652,23 @@ const Products = {
                 throw new Error('Archivo CSV vacío o inválido');
             }
 
+            // Detectar columnas automáticamente desde la primera fila (encabezado)
+            const headerFields = this.parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
+            const colIndex = {
+                nombre: headerFields.findIndex(h => h.includes('nombre') || h.includes('name') || h.includes('producto')),
+                categoria: headerFields.findIndex(h => h.includes('categor') || h.includes('category')),
+                precio: headerFields.findIndex(h => h.includes('precio') || h.includes('price')),
+                costo: headerFields.findIndex(h => h.includes('costo') || h.includes('cost')),
+                stock: headerFields.findIndex(h => h.includes('stock') || h.includes('cantidad')),
+                barcode: headerFields.findIndex(h => h.includes('barcode') || h.includes('codigo') || h.includes('sku'))
+            };
+
+            // Si no encuentra nombre, usa primera columna
+            if (colIndex.nombre === -1) colIndex.nombre = 0;
+            if (colIndex.precio === -1) colIndex.precio = 2;
+
+            console.log('Columnas detectadas:', colIndex);
+
             const dataLines = lines.slice(1);
             const categories = await DB.getAll('categories');
             const catNameToId = Object.fromEntries(categories.map(c => [c.name.toLowerCase(), c.id]));
@@ -661,11 +678,18 @@ const Products = {
 
             for (const line of dataLines) {
                 const fields = this.parseCSVLine(line);
-                if (fields.length < 6) continue;
+                if (fields.length < 2) continue;
 
-                const [name, categoryName, price, cost, , stock, barcode, active] = fields;
-                const cleanName = name.replace(/^"|"$/g, '').trim();
+                const cleanField = (idx) => idx >= 0 && fields[idx] ? fields[idx].replace(/^"|"$/g, '').trim() : '';
+
+                const cleanName = cleanField(colIndex.nombre);
                 if (!cleanName) continue;
+
+                const categoryName = cleanField(colIndex.categoria);
+                const price = cleanField(colIndex.precio);
+                const cost = cleanField(colIndex.costo);
+                const stock = cleanField(colIndex.stock);
+                const barcode = cleanField(colIndex.barcode);
 
                 const products = await DB.getAll('products');
                 const existing = products.find(p => p.name.toLowerCase() === cleanName.toLowerCase());
@@ -675,10 +699,10 @@ const Products = {
                     name: cleanName,
                     price: parseInt(price) || 0,
                     cost: parseInt(cost) || 0,
-                    category: catNameToId[categoryName.replace(/^"|"$/g, '').toLowerCase()] || '',
+                    category: catNameToId[categoryName.toLowerCase()] || '',
                     stock: parseInt(stock) || 0,
-                    barcode: barcode?.replace(/^"|"$/g, '') || '',
-                    is_active: active?.includes('Sí') ?? true,
+                    barcode: barcode || '',
+                    is_active: true,
                     tax_rate: 0.19,
                     image: existing?.image || null,
                     sync_status: 'PENDING',
@@ -688,7 +712,7 @@ const Products = {
 
                 await DB.put('products', product);
 
-                // Sync with cloud - CAMBIOS SE SINCRONIZAN AUTOMÁTICAMENTE
+                // Sync with cloud
                 if (typeof Sync !== 'undefined') {
                     await Sync.pushToCloud('products', existing ? 'UPDATE' : 'CREATE', product);
                 }
