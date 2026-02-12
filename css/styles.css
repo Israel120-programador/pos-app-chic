@@ -3518,3 +3518,37 @@ body {
         /* Limit height on mobile */
     }
 }
+
+/* =====================================================
+   RECEIPT PRINTING
+   ===================================================== */
+.receipt-container {
+    display: none;
+    /* Hide on screen to prevent layout/scroll issues */
+}
+
+@media print {
+    body * {
+        visibility: hidden;
+    }
+
+    .receipt-container,
+    .receipt-container * {
+        visibility: visible;
+    }
+
+    .receipt-container {
+        display: block !important;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+    }
+
+    @page {
+        size: auto;
+        margin: 0;
+    }
+}
