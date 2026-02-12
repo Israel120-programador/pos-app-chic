@@ -194,7 +194,8 @@ class POSScreen {
     }
 
     goBack() {
-        this.currentCategory = null;
+        console.log('goBack called');
+        this.currentCategory = 'all';
 
         // Reset grid styles from list view
         const grid = document.getElementById('pos-products-grid');
@@ -204,7 +205,7 @@ class POSScreen {
             grid.style.height = 'auto';
         }
 
-        this.renderProductPage();
+        this.renderProducts();
     }
 
     renderCategoryView(container, products) {
