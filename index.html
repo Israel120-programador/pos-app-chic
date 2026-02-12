@@ -148,7 +148,7 @@
                     <span class="nav-icon">📅</span>
                     <span class="nav-text">Ventas Diarias</span>
                 </li>
-                <li class="nav-item" data-section="customers" data-admin-only="true">
+                <li class="nav-item" data-section="customers" data-admin-only="true" style="display:none !important">
                     <span class="nav-icon">👥</span>
                     <span class="nav-text">Clientes</span>
                 </li>
@@ -375,73 +375,7 @@
                 </div>
             </div>
 
-            <!-- Payment Modal -->
-            <div id="payment-modal" class="modal">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h2>Confirmar Pago</h2>
-                        <button class="modal-close modal-cancel">&times;</button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="payment-summary">
-                            <div class="payment-total">
-                                <span>Total a Pagar</span>
-                                <span id="payment-total-amount">$0</span>
-                            </div>
-                        </div>
-
-                        <div class="payment-methods">
-                            <h3>Método de Pago</h3>
-                            <div class="payment-options">
-                                <button class="payment-option active" data-method="cash">
-                                    <span class="payment-icon">💵</span>
-                                    <span>Efectivo</span>
-                                </button>
-                                <button class="payment-option" data-method="card">
-                                    <span class="payment-icon">💳</span>
-                                    <span>Tarjeta</span>
-                                </button>
-                                <button class="payment-option" data-method="transfer">
-                                    <span class="payment-icon">📲</span>
-                                    <span>Transferencia</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div id="cash-payment-section" class="cash-payment-section">
-                            <div class="form-group">
-                                <label>Monto Recibido</label>
-                                <input type="number" id="cash-received" class="form-control" placeholder="0"
-                                    style="font-size: 1.5em; text-align: center;">
-                            </div>
-
-                            <div class="quick-amounts">
-                                <button class="quick-amount" data-amount="1000">$1.000</button>
-                                <button class="quick-amount" data-amount="2000">$2.000</button>
-                                <button class="quick-amount" data-amount="5000">$5.000</button>
-                                <button class="quick-amount" data-amount="10000">$10.000</button>
-                                <button class="quick-amount" data-amount="20000">$20.000</button>
-                                <button class="quick-amount" data-amount="exact">Exacto</button>
-                            </div>
-
-                            <div class="change-display">
-                                <span>Vuelto:</span>
-                                <span id="change-amount">$0</span>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label>Notas / Comentarios</label>
-                            <textarea id="payment-comments" class="form-control" rows="5"
-                                placeholder="Opcional..."></textarea>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button class="btn btn-secondary modal-cancel">Cancelar</button>
-                        <button class="btn btn-primary" id="confirm-payment">Confirmar Pago</button>
-                    </div>
-                </div>
-            </div>
+            <!-- Duplicate Payment Modal Removed -->
     </div>
 
     <!-- Modal Detalle de Venta -->
@@ -571,8 +505,7 @@
         </div>
     </section>
 
-    <!-- Customers Section -->
-    <section id="customers-section" class="section">
+    <section id="customers-section" class="section" style="display:none !important">
         <div class="section-header">
             <h1>👥 Clientes</h1>
             <button class="btn btn-primary" id="add-customer-btn">+ Nuevo Cliente</button>
@@ -790,6 +723,11 @@
                         <span>Vuelto:</span>
                         <span id="change-amount">$0</span>
                     </div>
+                </div>
+                <div class="form-group">
+                    <label>Nombre del Cliente (Opcional)</label>
+                    <input type="text" id="payment-customer-name" class="form-input"
+                        placeholder="Nombre para el llamado...">
                 </div>
                 <div class="form-group">
                     <label>Comentarios (opcional)</label>

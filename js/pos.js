@@ -441,6 +441,7 @@ class POSScreen {
         this.selectPaymentMethod('cash');
         document.getElementById('cash-received').value = '';
         document.getElementById('change-amount').textContent = '$0';
+        document.getElementById('payment-customer-name').value = ''; // Reset name
         document.getElementById('payment-comments').value = '';
 
         document.getElementById('payment-modal').classList.add('active');
@@ -465,45 +466,64 @@ class POSScreen {
     }
 
     async processPayment() {
-        const methodBtn = document.querySelector('.payment-option.active');
-        const metodoPago = methodBtn ? methodBtn.dataset.method : 'cash';
-        const notas = document.getElementById('payment-comments').value;
-        const currentUser = window.usersService?.getCurrentUser();
+        if (this.cart.length === 0) return;
 
-        // Validar pago en efectivo
-        if (metodoPago === 'cash' || metodoPago === 'efectivo') {
+        const btn = document.getElementById('process-payment');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = 'Procesando...';
+
+        try {
+            // Recopilar datos
+            const methodBtn = document.querySelector('.payment-option.active');
+            const method = methodBtn ? methodBtn.dataset.method : 'cash';
+            const amountReceived = parseFloat(document.getElementById('cash-received').value) || 0;
+            const comments = document.getElementById('payment-comments').value;
+            const customerName = document.getElementById('payment-customer-name')?.value || '';
+            const currentUser = window.usersService?.getCurrentUser();
+
             const total = this.cart.reduce((sum, item) => sum + item.subtotal, 0);
-            const received = parseInt(document.getElementById('cash-received').value) || 0;
-            if (received < total) {
-                window.Utils?.showToast('El monto recibido es insuficiente', 'error');
-                return;
+
+            // Validar monto efectivo
+            if (method === 'cash' && amountReceived < total) {
+                throw new Error('Monto recibido insuficiente');
+            }
+
+            const saleData = {
+                items: this.cart,
+                total: total,
+                metodoPago: method,
+                montoRecibido: amountReceived,
+                vuelto: amountReceived - total,
+                comentarios: comments,
+                clienteNombre: customerName,
+                vendedor: currentUser?.nombre || 'Desconocido',
+                vendedorId: currentUser?.id || 'unknown',
+                fecha: new Date(),
+                timestamp: window.FirebaseConfig?.serverTimestamp()
+            };
+
+            // Cerrar modal
+            document.getElementById('payment-modal').classList.remove('active');
+
+            const result = await window.salesService.createSale(saleData);
+
+            if (result.success) {
+                window.Utils?.showToast('Venta realizada con éxito', 'success');
+                this.clearCart();
+            } else {
+                throw new Error(result.error || 'Error desconocido al crear venta');
+            }
+        } catch (error) {
+            console.error('Error processing payment:', error);
+            window.Utils?.showToast(error.message || 'Error al procesar venta', 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
             }
         }
-
-        const saleData = {
-            items: this.cart,
-            metodoPago,
-            notas,
-            vendedor: currentUser?.nombre || 'Desconocido',
-            vendedorId: currentUser?.id || 'unknown',
-            descuento: 0,
-            imprimirRecibo: true
-        };
-
-        // Cerrar modal y mostrar indicador
-        document.getElementById('payment-modal').classList.remove('active');
-
-        const result = await window.salesService.createSale(saleData);
-
-        if (result.success) {
-            window.Utils?.showToast('Venta realizada con éxito', 'success');
-            this.clearCart();
-        } else {
-            console.error(result.error);
-            window.Utils?.showToast('Error al procesar venta: ' + result.error, 'error');
-        }
     }
-}
 
 // Crear instancia global
 window.posScreen = new POSScreen();

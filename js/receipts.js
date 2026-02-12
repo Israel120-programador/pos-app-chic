@@ -44,6 +44,7 @@ const Receipts = {
                 <p><strong>BOLETA ELECTRÓNICA</strong></p>
                 <p>Folio: ${sale.id.substring(0, 12).toUpperCase()}</p>
                 <p>Fecha: ${Utils.formatDateTime(sale.timestamp)}</p>
+                ${sale.clienteNombre ? `<p>Cliente: ${Utils.escapeHtml(sale.clienteNombre)}</p>` : ''}
             </div>
             
             <div class="receipt-items">
@@ -96,6 +97,7 @@ const Receipts = {
             <div class="receipt-info">
                 <p><strong>Fecha:</strong> ${Utils.formatDateTime(sale.timestamp)}</p>
                 <p><strong>Cajero:</strong> ${Utils.escapeHtml(cashierName || 'N/A')}</p>
+                ${sale.clienteNombre ? `<p><strong>Cliente:</strong> ${Utils.escapeHtml(sale.clienteNombre)}</p>` : ''}
                 <p><strong>Pago:</strong> ${Utils.getPaymentMethodDisplay(sale.payment_method).label}</p>
             </div>
             
