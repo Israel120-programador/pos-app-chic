@@ -1,12 +1,13 @@
 /* =====================================================
    POS APP - SYNC MODULE
-   Sincronización bidireccional con Supabase
+   Sincronización bidireccional con Firebase Firestore
    ===================================================== */
 
 const Sync = {
     isOnline: navigator.onLine,
     channels: {},
     retryQueue: [],
+    _skipRemoteUpdates: false,
 
     async init() {
         // Monitor online/offline status
@@ -53,7 +54,6 @@ const Sync = {
         this.updateStatusIndicator();
 
         if (this.isSupabaseReady()) {
-            // Full sync when coming back online
             console.log('🔄 Sincronizando datos después de reconexión...');
             await this.initialSync();
             await this.processRetryQueue();
@@ -75,7 +75,6 @@ const Sync = {
         const icon = statusEl.querySelector('.sync-icon');
         const text = statusEl.querySelector('.sync-text');
 
-        // Always show manual sync button if it exists
         if (manualBtn) manualBtn.classList.remove('hidden');
 
         if (status === 'syncing') {
@@ -112,21 +111,15 @@ const Sync = {
     async initialSync() {
         if (!this.isSupabaseReady()) return;
 
-        console.log('🔄 Sincronizando con la nube...');
+        console.log('🔄 Sincronizando con Firebase...');
         this.updateStatusIndicator('syncing');
 
         try {
-            // Sync products
             await this.pullFromCloud('products');
-
-            // Sync categories
             await this.pullFromCloud('categories');
-
-            // Sync users
             await this.pullFromCloud('users');
-
-            // Sync orders/sales
             await this.pullFromCloud('sales');
+            await this.pullFromCloud('inventory_movements');
 
             console.log('✅ Sincronización inicial completada');
             this.updateStatusIndicator();
@@ -154,8 +147,10 @@ const Sync = {
                     cloudData = await SupabaseDB.getUsers();
                     break;
                 case 'sales':
-                    // Pull today's orders from Supabase
                     cloudData = await SupabaseDB.getTodayOrders();
+                    break;
+                case 'inventory_movements':
+                    cloudData = await SupabaseDB.getInventoryMovements();
                     break;
                 case 'settings':
                     const settings = await SupabaseDB.getSettings();
@@ -163,7 +158,6 @@ const Sync = {
                     break;
             }
 
-            // Transform cloud data to local format and save
             for (const item of cloudData) {
                 const localItem = this.cloudToLocal(entityType, item);
                 await DB.put(entityType, localItem);
@@ -177,48 +171,57 @@ const Sync = {
     },
 
     // =====================================================
-    // REAL-TIME SUBSCRIPTIONS
+    // REAL-TIME SUBSCRIPTIONS (Firebase onSnapshot)
     // =====================================================
     subscribeToChanges() {
         if (!this.isSupabaseReady()) return;
 
+        // Unsubscribe existing listeners first
+        this.unsubscribeAll();
+
         // Subscribe to products changes
         this.channels.products = SupabaseDB.subscribeToProducts(async (payload) => {
+            if (this._skipRemoteUpdates) return;
             console.log('📦 Cambio en productos:', payload.eventType);
             await this.handleRemoteChange('products', payload);
         });
 
         // Subscribe to categories
-        if (typeof SupabaseDB.subscribeToCategories === 'function') {
-            this.channels.categories = SupabaseDB.subscribeToCategories(async (payload) => {
-                console.log('📁 Cambio en categorías:', payload.eventType);
-                await this.handleRemoteChange('categories', payload);
-            });
-        }
+        this.channels.categories = SupabaseDB.subscribeToCategories(async (payload) => {
+            if (this._skipRemoteUpdates) return;
+            console.log('📁 Cambio en categorías:', payload.eventType);
+            await this.handleRemoteChange('categories', payload);
+        });
 
         // Subscribe to users
-        if (typeof SupabaseDB.subscribeToUsers === 'function') {
-            this.channels.users = SupabaseDB.subscribeToUsers(async (payload) => {
-                console.log('👤 Cambio en usuarios:', payload.eventType);
-                await this.handleRemoteChange('users', payload);
-            });
-        }
+        this.channels.users = SupabaseDB.subscribeToUsers(async (payload) => {
+            if (this._skipRemoteUpdates) return;
+            console.log('👤 Cambio en usuarios:', payload.eventType);
+            await this.handleRemoteChange('users', payload);
+        });
 
         // Subscribe to orders
         this.channels.orders = SupabaseDB.subscribeToOrders(async (payload) => {
+            if (this._skipRemoteUpdates) return;
             console.log('🧾 Cambio en pedidos:', payload.eventType);
             await this.handleRemoteChange('sales', payload);
         });
 
         // Subscribe to settings
-        if (typeof SupabaseDB.subscribeToSettings === 'function') {
-            this.channels.settings = SupabaseDB.subscribeToSettings(async (payload) => {
-                console.log('⚙️ Cambio en configuración:', payload.eventType);
-                await this.handleRemoteChange('settings', payload);
-            });
-        }
+        this.channels.settings = SupabaseDB.subscribeToSettings(async (payload) => {
+            if (this._skipRemoteUpdates) return;
+            console.log('⚙️ Cambio en configuración:', payload.eventType);
+            await this.handleRemoteChange('settings', payload);
+        });
 
-        console.log('📡 Suscripto a cambios en tiempo real');
+        // Subscribe to inventory movements
+        this.channels.movements = SupabaseDB.subscribeToInventoryMovements(async (payload) => {
+            if (this._skipRemoteUpdates) return;
+            console.log('📦 Cambio en movimientos:', payload.eventType);
+            await this.handleRemoteChange('inventory_movements', payload);
+        });
+
+        console.log('📡 Suscripto a cambios en tiempo real (Firebase)');
     },
 
     async handleRemoteChange(entityType, payload) {
@@ -240,7 +243,6 @@ const Sync = {
                 break;
         }
 
-        // Refresh UI based on entity type
         this.refreshUI(entityType);
     },
 
@@ -264,21 +266,30 @@ const Sync = {
             case 'settings':
                 if (typeof Settings !== 'undefined') Settings.loadSettings();
                 break;
+            case 'inventory_movements':
+                // Refresh inventory and stats
+                if (typeof Inventory !== 'undefined') {
+                    Inventory.loadAll();
+                    // Verify if this is enough. Usually loadAll loads products and movements.
+                }
+                break;
         }
     },
 
     // =====================================================
-    // PUSH TO CLOUD - Save local changes to Supabase
+    // PUSH TO CLOUD - Save local changes to Firebase
     // =====================================================
     async pushToCloud(entityType, action, data) {
         if (!this.isSupabaseReady() || !this.isOnline) {
-            // Queue for later sync
             this.retryQueue.push({ entityType, action, data, timestamp: Date.now() });
             console.log('📋 Cambio guardado para sincronizar después');
             return false;
         }
 
         try {
+            // Skip processing our own remote changes while pushing
+            this._skipRemoteUpdates = true;
+
             const cloudData = this.localToCloud(entityType, data);
 
             switch (entityType) {
@@ -286,12 +297,8 @@ const Sync = {
                     if (action === 'DELETE') {
                         await SupabaseDB.deleteProduct(data.id);
                     } else {
-                        // Upsert: try update, if fails try create
-                        try {
-                            await SupabaseDB.updateProduct(data.id, cloudData);
-                        } catch (e) {
-                            await SupabaseDB.createProduct(cloudData);
-                        }
+                        // Firestore set with merge = upsert
+                        await SupabaseDB.createProduct(cloudData);
                     }
                     break;
 
@@ -299,11 +306,7 @@ const Sync = {
                     if (action === 'DELETE') {
                         await SupabaseDB.deleteCategory(data.id);
                     } else {
-                        try {
-                            await SupabaseDB.updateCategory(data.id, cloudData);
-                        } catch (e) {
-                            await SupabaseDB.createCategory(cloudData);
-                        }
+                        await SupabaseDB.createCategory(cloudData);
                     }
                     break;
 
@@ -311,20 +314,14 @@ const Sync = {
                     if (action === 'DELETE') {
                         await SupabaseDB.deleteUser(data.id);
                     } else {
-                        try {
-                            await SupabaseDB.updateUser(data.id, cloudData);
-                        } catch (e) {
-                            await SupabaseDB.createUser(cloudData);
-                        }
+                        await SupabaseDB.createUser(cloudData);
                     }
                     break;
 
                 case 'sales':
                     if (action === 'DELETE') {
-                        // Orders typically aren't deleted, but if needed:
-                        // await SupabaseDB.deleteOrder(data.id);
+                        // Orders typically aren't deleted
                     } else {
-                        // Create order with items
                         const orderData = cloudData.order;
                         const orderItems = cloudData.items;
                         await SupabaseDB.createOrder(orderData, orderItems);
@@ -334,14 +331,26 @@ const Sync = {
                 case 'settings':
                     await SupabaseDB.updateSettings(cloudData);
                     break;
+
+                case 'inventory_movements':
+                    // Append-only history
+                    if (action === 'DELETE') {
+                        // Not commonly used, but for cleanup
+                    } else {
+                        await SupabaseDB.createInventoryMovement(cloudData);
+                    }
+                    break;
             }
 
-            console.log(`☁️ ${entityType} sincronizado con la nube`);
+            // Re-enable remote updates after a short delay
+            setTimeout(() => { this._skipRemoteUpdates = false; }, 1000);
+
+            console.log(`☁️ ${entityType} sincronizado con Firebase`);
             return true;
 
         } catch (error) {
+            this._skipRemoteUpdates = false;
             console.error(`Error sincronizando ${entityType}:`, error);
-            // Queue for retry
             this.retryQueue.push({ entityType, action, data, timestamp: Date.now() });
             return false;
         }
@@ -356,10 +365,7 @@ const Sync = {
         this.retryQueue = [];
 
         for (const item of queue) {
-            const success = await this.pushToCloud(item.entityType, item.action, item.data);
-            if (!success) {
-                // Will be re-added to queue by pushToCloud
-            }
+            await this.pushToCloud(item.entityType, item.action, item.data);
         }
     },
 
@@ -367,7 +373,6 @@ const Sync = {
     // DATA TRANSFORMATION
     // =====================================================
     cloudToLocal(entityType, cloudData) {
-        // Transform Supabase format to local format
         switch (entityType) {
             case 'products':
                 return {
@@ -375,11 +380,11 @@ const Sync = {
                     name: cloudData.name,
                     price: cloudData.price,
                     cost: cloudData.cost || 0,
-                    category: cloudData.category_id,
+                    category: cloudData.category_id || cloudData.category,
                     stock: cloudData.stock,
                     barcode: cloudData.barcode,
                     image: cloudData.image,
-                    is_active: cloudData.active !== false,
+                    is_active: cloudData.active !== false && cloudData.is_active !== false,
                     tax_rate: 0.19,
                     sync_status: 'SYNCED',
                     created_at: cloudData.created_at,
@@ -408,7 +413,6 @@ const Sync = {
                 };
 
             case 'sales':
-                // Transform Supabase order to local sale format
                 return {
                     id: cloudData.id,
                     order_number: cloudData.folio,
@@ -420,18 +424,32 @@ const Sync = {
                     customer_id: cloudData.customer_id,
                     cashier_id: cloudData.user_id,
                     device_id: 'cloud',
-                    items: (cloudData.order_items || []).map(item => ({
+                    items: (cloudData.items || cloudData.order_items || []).map(item => ({
                         product_id: item.product_id,
-                        product_name: item.products?.name || 'Producto',
+                        product_name: item.product_name || item.name || item.products?.name || 'Producto',
                         quantity: item.quantity,
                         unit_price: item.unit_price,
-                        subtotal: item.total,
-                        modifiers: []
+                        subtotal: item.total || item.subtotal,
+                        modifiers: item.modifiers || []
                     })),
-                    comments: cloudData.notes || '',
+                    comments: cloudData.notes || cloudData.comments || '',
                     status: cloudData.status,
                     sync_status: 'SYNCED',
                     created_at_local: cloudData.created_at
+                };
+
+            case 'inventory_movements':
+                return {
+                    id: cloudData.id,
+                    product_id: cloudData.product_id,
+                    movement_type: cloudData.movement_type,
+                    quantity_change: cloudData.quantity_change,
+                    previous_stock: cloudData.previous_stock,
+                    new_stock: cloudData.new_stock,
+                    reason: cloudData.reason,
+                    user_id: cloudData.user_id,
+                    timestamp: cloudData.timestamp || cloudData.created_at,
+                    sync_status: 'SYNCED'
                 };
 
             default:
@@ -440,7 +458,6 @@ const Sync = {
     },
 
     localToCloud(entityType, localData) {
-        // Transform local format to Supabase format
         switch (entityType) {
             case 'products':
                 return {
@@ -475,27 +492,30 @@ const Sync = {
                 };
 
             case 'sales':
-                // Transform local sale to Supabase order format
+                // Flat structure is better for Firestore unless we really need relational
+                // But for now let's keep the structure flexible but ensure fields exist
                 return {
-                    order: {
-                        id: localData.id,
-                        folio: localData.order_number,
-                        user_id: localData.cashier_id,
-                        customer_id: localData.customer_id,
-                        total: localData.total,
-                        subtotal: localData.subtotal,
-                        tax: localData.tax,
-                        payment_method: localData.payment_method,
-                        status: localData.status || 'completed',
-                        notes: localData.comments || null,
-                        created_at: localData.timestamp
-                    },
+                    id: localData.id,
+                    folio: localData.order_number,
+                    user_id: localData.cashier_id,
+                    customer_id: localData.customer_id,
+                    total: localData.total,
+                    subtotal: localData.subtotal,
+                    tax: localData.tax,
+                    payment_method: localData.payment_method,
+                    status: localData.status || 'completed',
+                    notes: localData.comments || null,
+                    created_at: localData.timestamp,
+                    // Store items directly
                     items: (localData.items || []).map(item => ({
                         product_id: item.product_id,
+                        product_name: item.product_name,
                         quantity: item.quantity,
                         unit_price: item.unit_price,
-                        total: item.subtotal,
-                        notes: null
+                        subtotal: item.subtotal, // match local property
+                        total: item.subtotal, // alias for backend
+                        notes: null,
+                        modifiers: item.modifiers || []
                     }))
                 };
 
@@ -508,8 +528,10 @@ const Sync = {
     // CLEANUP
     // =====================================================
     unsubscribeAll() {
-        Object.values(this.channels).forEach(channel => {
-            SupabaseDB.unsubscribe(channel);
+        Object.values(this.channels).forEach(unsubFn => {
+            if (typeof unsubFn === 'function') {
+                unsubFn(); // Firebase onSnapshot returns an unsubscribe function
+            }
         });
         this.channels = {};
     }

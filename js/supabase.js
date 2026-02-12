@@ -1,202 +1,152 @@
-// =====================================================
-// SUPABASE CLIENT - POS App Multi-Dispositivo
-// =====================================================
+/* =====================================================
+   FIREBASE FIRESTORE - POS App Multi-Dispositivo
+   Reemplaza Supabase con Firebase Firestore
+   ===================================================== */
 
-const SUPABASE_URL = 'https://bmnlzxwpeyavfnzvcthd.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtbmx6eHdwZXlhdmZuenZjdGhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYxNjU5MTcsImV4cCI6MjA4MTc0MTkxN30.xBOkAWOIYXtG_u4vDOxHEdOCAliNfQj9qjYDLsRHXT0';
-
-// Supabase client instance
-let supabaseClient = null;
-
-// Initialize Supabase
 const SupabaseDB = {
-    // Initialize the Supabase client
+    db: null,
+
     init() {
-        if (typeof supabase !== 'undefined') {
-            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            console.log('✅ Supabase conectado');
+        if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
+            this.db = firebase.firestore();
+            // Enable offline persistence for better offline support
+            this.db.enablePersistence({ synchronizeTabs: true }).catch(err => {
+                console.warn('Firestore persistence error:', err.code);
+            });
+            console.log('✅ Firebase Firestore conectado');
             return true;
         } else {
-            console.error('❌ Supabase SDK no cargado');
+            console.error('❌ Firebase no inicializado');
             return false;
         }
     },
 
-    // Get client
     getClient() {
-        return supabaseClient;
+        return this.db;
     },
 
     // =====================================================
     // USERS / AUTHENTICATION
     // =====================================================
     async getUsers() {
-        const { data, error } = await supabaseClient
-            .from('users')
-            .select('*')
-            .order('name');
-        if (error) throw error;
-        return data || [];
+        const snapshot = await this.db.collection('users').orderBy('name').get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     },
 
     async getUserByPin(pin) {
-        const { data, error } = await supabaseClient
-            .from('users')
-            .select('*')
-            .eq('pin', pin)
-            .eq('active', true)
-            .single();
-        if (error && error.code !== 'PGRST116') throw error;
-        return data;
+        const snapshot = await this.db.collection('users')
+            .where('pin', '==', pin)
+            .where('active', '==', true)
+            .limit(1)
+            .get();
+        return snapshot.empty ? null : { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
     },
 
     async createUser(user) {
-        const { data, error } = await supabaseClient
-            .from('users')
-            .insert([user])
-            .select()
-            .single();
-        if (error) throw error;
+        const id = user.id || this.db.collection('users').doc().id;
+        const data = { ...user, id, created_at: user.created_at || new Date().toISOString() };
+        await this.db.collection('users').doc(id).set(data, { merge: true });
         return data;
     },
 
     async updateUser(id, updates) {
-        const { data, error } = await supabaseClient
-            .from('users')
-            .update(updates)
-            .eq('id', id)
-            .select()
-            .single();
-        if (error) throw error;
-        return data;
+        await this.db.collection('users').doc(id).set(updates, { merge: true });
+        const doc = await this.db.collection('users').doc(id).get();
+        return doc.exists ? { id: doc.id, ...doc.data() } : updates;
     },
 
     async deleteUser(id) {
-        const { error } = await supabaseClient
-            .from('users')
-            .delete()
-            .eq('id', id);
-        if (error) throw error;
+        await this.db.collection('users').doc(id).delete();
     },
 
     // =====================================================
     // CATEGORIES
     // =====================================================
     async getCategories() {
-        const { data, error } = await supabaseClient
-            .from('categories')
-            .select('*')
-            .order('name');
-        if (error) throw error;
-        return data || [];
+        const snapshot = await this.db.collection('categories').orderBy('name').get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     },
 
     async createCategory(category) {
-        const { data, error } = await supabaseClient
-            .from('categories')
-            .insert([category])
-            .select()
-            .single();
-        if (error) throw error;
+        const id = category.id || this.db.collection('categories').doc().id;
+        const data = { ...category, id, created_at: category.created_at || new Date().toISOString() };
+        await this.db.collection('categories').doc(id).set(data, { merge: true });
         return data;
     },
 
     async updateCategory(id, updates) {
-        const { data, error } = await supabaseClient
-            .from('categories')
-            .update(updates)
-            .eq('id', id)
-            .select()
-            .single();
-        if (error) throw error;
-        return data;
+        await this.db.collection('categories').doc(id).set(updates, { merge: true });
+        const doc = await this.db.collection('categories').doc(id).get();
+        return doc.exists ? { id: doc.id, ...doc.data() } : updates;
     },
 
     async deleteCategory(id) {
-        const { error } = await supabaseClient
-            .from('categories')
-            .delete()
-            .eq('id', id);
-        if (error) throw error;
+        await this.db.collection('categories').doc(id).delete();
     },
 
     // =====================================================
     // PRODUCTS
     // =====================================================
     async getProducts() {
-        const { data, error } = await supabaseClient
-            .from('products')
-            .select('*, categories(name, color, icon)')
-            .order('name');
-        if (error) throw error;
-        return data || [];
+        const snapshot = await this.db.collection('products').orderBy('name').get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     },
 
     async getProductsByCategory(categoryId) {
-        const { data, error } = await supabaseClient
-            .from('products')
-            .select('*, categories(name, color, icon)')
-            .eq('category_id', categoryId)
-            .order('name');
-        if (error) throw error;
-        return data || [];
+        const snapshot = await this.db.collection('products')
+            .where('category_id', '==', categoryId)
+            .orderBy('name')
+            .get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     },
 
     async createProduct(product) {
-        const { data, error } = await supabaseClient
-            .from('products')
-            .insert([product])
-            .select()
-            .single();
-        if (error) throw error;
+        const id = product.id || this.db.collection('products').doc().id;
+        const data = { ...product, id, created_at: product.created_at || new Date().toISOString() };
+        await this.db.collection('products').doc(id).set(data, { merge: true });
         return data;
     },
 
     async updateProduct(id, updates) {
-        const { data, error } = await supabaseClient
-            .from('products')
-            .update(updates)
-            .eq('id', id)
-            .select()
-            .single();
-        if (error) throw error;
-        return data;
+        await this.db.collection('products').doc(id).set(updates, { merge: true });
+        const doc = await this.db.collection('products').doc(id).get();
+        return doc.exists ? { id: doc.id, ...doc.data() } : updates;
     },
 
     async deleteProduct(id) {
-        const { error } = await supabaseClient
-            .from('products')
-            .delete()
-            .eq('id', id);
-        if (error) throw error;
+        await this.db.collection('products').doc(id).delete();
     },
 
     async updateStock(id, quantity) {
-        const { data, error } = await supabaseClient
-            .rpc('update_stock', { product_id: id, qty: quantity });
-        if (error) throw error;
-        return data;
+        await this.db.collection('products').doc(id).update({
+            stock: firebase.firestore.FieldValue.increment(quantity)
+        });
     },
 
     // =====================================================
     // ORDERS (VENTAS)
     // =====================================================
     async getOrders(dateFrom = null, dateTo = null) {
-        let query = supabaseClient
-            .from('orders')
-            .select('*, order_items(*, products(name)), users(name)')
-            .order('created_at', { ascending: false });
+        let query = this.db.collection('orders').orderBy('created_at', 'desc');
 
         if (dateFrom) {
-            query = query.gte('created_at', dateFrom);
+            query = query.where('created_at', '>=', dateFrom);
         }
         if (dateTo) {
-            query = query.lte('created_at', dateTo);
+            query = query.where('created_at', '<=', dateTo);
         }
 
-        const { data, error } = await query;
-        if (error) throw error;
-        return data || [];
+        const snapshot = await query.limit(200).get();
+        const orders = [];
+
+        for (const doc of snapshot.docs) {
+            const order = { id: doc.id, ...doc.data() };
+            const itemsSnap = await this.db.collection('orders').doc(doc.id)
+                .collection('items').get();
+            order.order_items = itemsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            orders.push(order);
+        }
+        return orders;
     },
 
     async getTodayOrders() {
@@ -204,179 +154,275 @@ const SupabaseDB = {
         today.setHours(0, 0, 0, 0);
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
-
         return this.getOrders(today.toISOString(), tomorrow.toISOString());
     },
 
     async getPendingOrders() {
-        const { data, error } = await supabaseClient
-            .from('orders')
-            .select('*, order_items(*, products(name)), users(name)')
-            .in('status', ['pending', 'preparing'])
-            .order('created_at', { ascending: true });
-        if (error) throw error;
-        return data || [];
+        const snapshot = await this.db.collection('orders')
+            .where('status', 'in', ['pending', 'preparing'])
+            .orderBy('created_at', 'asc')
+            .get();
+
+        const orders = [];
+        for (const doc of snapshot.docs) {
+            const order = { id: doc.id, ...doc.data() };
+            const itemsSnap = await this.db.collection('orders').doc(doc.id)
+                .collection('items').get();
+            order.order_items = itemsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            orders.push(order);
+        }
+        return orders;
     },
 
     async createOrder(order, items) {
-        // Create the order
-        const { data: orderData, error: orderError } = await supabaseClient
-            .from('orders')
-            .insert([order])
-            .select()
-            .single();
-        if (orderError) throw orderError;
+        const id = order.id || this.db.collection('orders').doc().id;
+        const orderData = { ...order, id, created_at: order.created_at || new Date().toISOString() };
+        await this.db.collection('orders').doc(id).set(orderData, { merge: true });
 
-        // Add order items
-        const orderItems = items.map(item => ({
-            order_id: orderData.id,
-            product_id: item.product_id,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            total: item.total,
-            notes: item.notes || null
-        }));
-
-        const { error: itemsError } = await supabaseClient
-            .from('order_items')
-            .insert(orderItems);
-        if (itemsError) throw itemsError;
-
+        if (items && items.length > 0) {
+            const batch = this.db.batch();
+            items.forEach(item => {
+                const itemRef = this.db.collection('orders').doc(id).collection('items').doc();
+                batch.set(itemRef, {
+                    order_id: id,
+                    product_id: item.product_id,
+                    product_name: item.product_name || 'Producto',
+                    quantity: item.quantity,
+                    unit_price: item.unit_price,
+                    total: item.total,
+                    notes: item.notes || null
+                });
+            });
+            await batch.commit();
+        }
         return orderData;
     },
 
     async updateOrderStatus(id, status) {
         const updates = { status };
-        if (status === 'ready') {
-            updates.ready_at = new Date().toISOString();
-        } else if (status === 'completed') {
-            updates.completed_at = new Date().toISOString();
-        }
+        if (status === 'ready') updates.ready_at = new Date().toISOString();
+        if (status === 'completed') updates.completed_at = new Date().toISOString();
 
-        const { data, error } = await supabaseClient
-            .from('orders')
-            .update(updates)
-            .eq('id', id)
-            .select()
-            .single();
-        if (error) throw error;
-        return data;
+        await this.db.collection('orders').doc(id).update(updates);
+        const doc = await this.db.collection('orders').doc(id).get();
+        return { id: doc.id, ...doc.data() };
+    },
+
+    async deleteAllOrders() {
+        // Batch delete (limit 500 per batch)
+        const snapshot = await this.db.collection('orders').limit(500).get();
+        const batch = this.db.batch();
+        let count = 0;
+
+        snapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+            count++;
+        });
+
+        if (count > 0) {
+            await batch.commit();
+            // If there were 500, there might be more. Recurse?
+            if (count === 500) await this.deleteAllOrders();
+        }
+        return count;
     },
 
     // =====================================================
-    // REAL-TIME SUBSCRIPTIONS
+    // REAL-TIME SUBSCRIPTIONS (Firestore onSnapshot)
     // =====================================================
     subscribeToOrders(callback) {
-        return supabaseClient
-            .channel('orders-channel')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'orders'
-            }, (payload) => {
-                console.log('📦 Order change:', payload);
-                callback(payload);
-            })
-            .subscribe();
+        let isInitialLoad = true;
+        const unsub = this.db.collection('orders')
+            .orderBy('created_at', 'desc')
+            .limit(50)
+            .onSnapshot(snapshot => {
+                if (isInitialLoad) {
+                    isInitialLoad = false;
+                    console.log('🧾 Orders: initial snapshot loaded (' + snapshot.size + ' docs)');
+                    return; // Skip initial snapshot
+                }
+                snapshot.docChanges().forEach(change => {
+                    if (change.doc.metadata.hasPendingWrites) return; // Skip local writes
+                    const data = { id: change.doc.id, ...change.doc.data() };
+                    callback({
+                        eventType: change.type === 'added' ? 'INSERT' :
+                            change.type === 'modified' ? 'UPDATE' : 'DELETE',
+                        new: change.type !== 'removed' ? data : null,
+                        old: change.type === 'removed' ? data : null
+                    });
+                });
+            });
+        return unsub;
     },
 
     subscribeToProducts(callback) {
-        return supabaseClient
-            .channel('products-channel')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'products'
-            }, (payload) => {
-                console.log('🛒 Product change:', payload);
-                callback(payload);
-            })
-            .subscribe();
+        let isInitialLoad = true;
+        const unsub = this.db.collection('products')
+            .onSnapshot(snapshot => {
+                if (isInitialLoad) {
+                    isInitialLoad = false;
+                    console.log('📦 Products: initial snapshot loaded (' + snapshot.size + ' docs)');
+                    return; // Skip initial snapshot
+                }
+                snapshot.docChanges().forEach(change => {
+                    if (change.doc.metadata.hasPendingWrites) return; // Skip local writes
+                    const data = { id: change.doc.id, ...change.doc.data() };
+                    callback({
+                        eventType: change.type === 'added' ? 'INSERT' :
+                            change.type === 'modified' ? 'UPDATE' : 'DELETE',
+                        new: change.type !== 'removed' ? data : null,
+                        old: change.type === 'removed' ? data : null
+                    });
+                });
+            });
+        return unsub;
     },
 
     subscribeToCategories(callback) {
-        return supabaseClient
-            .channel('categories-channel')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'categories'
-            }, (payload) => {
-                console.log('📁 Category change:', payload);
-                callback(payload);
-            })
-            .subscribe();
+        let isInitialLoad = true;
+        const unsub = this.db.collection('categories')
+            .onSnapshot(snapshot => {
+                if (isInitialLoad) {
+                    isInitialLoad = false;
+                    console.log('📁 Categories: initial snapshot loaded (' + snapshot.size + ' docs)');
+                    return; // Skip initial snapshot
+                }
+                snapshot.docChanges().forEach(change => {
+                    if (change.doc.metadata.hasPendingWrites) return;
+                    const data = { id: change.doc.id, ...change.doc.data() };
+                    callback({
+                        eventType: change.type === 'added' ? 'INSERT' :
+                            change.type === 'modified' ? 'UPDATE' : 'DELETE',
+                        new: change.type !== 'removed' ? data : null,
+                        old: change.type === 'removed' ? data : null
+                    });
+                });
+            });
+        return unsub;
     },
 
     subscribeToUsers(callback) {
-        return supabaseClient
-            .channel('users-channel')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'users'
-            }, (payload) => {
-                console.log('👤 User change:', payload);
-                callback(payload);
-            })
-            .subscribe();
+        let isInitialLoad = true;
+        const unsub = this.db.collection('users')
+            .onSnapshot(snapshot => {
+                if (isInitialLoad) {
+                    isInitialLoad = false;
+                    console.log('👤 Users: initial snapshot loaded (' + snapshot.size + ' docs)');
+                    return;
+                }
+                snapshot.docChanges().forEach(change => {
+                    if (change.doc.metadata.hasPendingWrites) return;
+                    const data = { id: change.doc.id, ...change.doc.data() };
+                    callback({
+                        eventType: change.type === 'added' ? 'INSERT' :
+                            change.type === 'modified' ? 'UPDATE' : 'DELETE',
+                        new: change.type !== 'removed' ? data : null,
+                        old: change.type === 'removed' ? data : null
+                    });
+                });
+            });
+        return unsub;
     },
 
-    unsubscribe(channel) {
-        if (channel) {
-            supabaseClient.removeChannel(channel);
+    unsubscribe(unsubscribeFn) {
+        if (typeof unsubscribeFn === 'function') {
+            unsubscribeFn();
         }
+    },
+
+    // =====================================================
+    // INVENTORY MOVEMENTS - Sync history
+    // =====================================================
+    async getInventoryMovements() {
+        const snapshot = await this.db.collection('inventory_movements')
+            .orderBy('timestamp', 'desc')
+            .limit(500)
+            .get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    },
+
+    async createInventoryMovement(movement) {
+        const id = movement.id || this.db.collection('inventory_movements').doc().id;
+        const data = { ...movement, id, created_at: movement.timestamp || new Date().toISOString() };
+        await this.db.collection('inventory_movements').doc(id).set(data);
+        return data;
+    },
+
+    async deleteAllInventoryMovements() {
+        const snapshot = await this.db.collection('inventory_movements').limit(500).get();
+        const batch = this.db.batch();
+        let count = 0;
+
+        snapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+            count++;
+        });
+
+        if (count > 0) {
+            await batch.commit();
+            if (count === 500) await this.deleteAllInventoryMovements();
+        }
+        return count;
+    },
+
+    subscribeToInventoryMovements(callback) {
+        let isInitialLoad = true;
+        const unsub = this.db.collection('inventory_movements')
+            .orderBy('timestamp', 'desc')
+            .limit(50)
+            .onSnapshot(snapshot => {
+                if (isInitialLoad) {
+                    isInitialLoad = false;
+                    return;
+                }
+                snapshot.docChanges().forEach(change => {
+                    if (change.doc.metadata.hasPendingWrites) return;
+                    const data = { id: change.doc.id, ...change.doc.data() };
+                    callback({
+                        eventType: change.type === 'added' ? 'INSERT' :
+                            change.type === 'modified' ? 'UPDATE' : 'DELETE',
+                        new: change.type !== 'removed' ? data : null,
+                        old: change.type === 'removed' ? data : null
+                    });
+                });
+            });
+        return unsub;
     },
 
     // =====================================================
     // GLOBAL SETTINGS
     // =====================================================
     async getSettings() {
-        // We assume a 'settings' table with a 'key' column. 
-        // We want the row where key = 'global'
-        const { data, error } = await supabaseClient
-            .from('settings')
-            .select('*')
-            .eq('key', 'global')
-            .single();
-
-        if (error) {
-            // If table doesn't exist or row missing, return null to use defaults
-            console.warn('Could not fetch global settings:', error.message);
-            return null;
-        }
-        return data?.value || null; // value column should hold the JSON
+        const doc = await this.db.collection('settings').doc('global').get();
+        return doc.exists ? doc.data()?.value || doc.data() : null;
     },
 
     async updateSettings(settings) {
-        // Upsert the 'global' settings row
-        const { data, error } = await supabaseClient
-            .from('settings')
-            .upsert({
-                key: 'global',
-                value: settings,
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'key' })
-            .select()
-            .single();
-
-        if (error) throw error;
-        return data;
+        await this.db.collection('settings').doc('global').set({
+            key: 'global',
+            value: settings,
+            updated_at: new Date().toISOString()
+        }, { merge: true });
+        return settings;
     },
 
     subscribeToSettings(callback) {
-        return supabaseClient
-            .channel('settings-channel')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'settings',
-                filter: 'key=eq.global'
-            }, (payload) => {
-                console.log('⚙️ Settings change:', payload);
-                callback(payload);
-            })
-            .subscribe();
+        let isInitialLoad = true;
+        const unsub = this.db.collection('settings').doc('global')
+            .onSnapshot(doc => {
+                if (isInitialLoad) {
+                    isInitialLoad = false;
+                    return;
+                }
+                if (doc.exists && !doc.metadata.hasPendingWrites) {
+                    callback({
+                        eventType: 'UPDATE',
+                        new: { id: doc.id, ...doc.data() },
+                        old: null
+                    });
+                }
+            });
+        return unsub;
     },
 
     // =====================================================
@@ -386,7 +432,6 @@ const SupabaseDB = {
         console.log('🔄 Iniciando migración desde localStorage...');
 
         try {
-            // Migrate categories
             const localCategories = JSON.parse(localStorage.getItem('pos_categories') || '[]');
             if (localCategories.length > 0) {
                 console.log(`📁 Migrando ${localCategories.length} categorías...`);
@@ -401,7 +446,6 @@ const SupabaseDB = {
                 }
             }
 
-            // Migrate products
             const localProducts = JSON.parse(localStorage.getItem('pos_products') || '[]');
             if (localProducts.length > 0) {
                 console.log(`📦 Migrando ${localProducts.length} productos...`);
@@ -426,7 +470,6 @@ const SupabaseDB = {
                 }
             }
 
-            // Migrate users
             const localUsers = JSON.parse(localStorage.getItem('pos_users') || '[]');
             if (localUsers.length > 0) {
                 console.log(`👤 Migrando ${localUsers.length} usuarios...`);
@@ -448,12 +491,9 @@ const SupabaseDB = {
         }
     },
 
-    // Check if cloud has data
     async hasCloudData() {
-        const { count } = await supabaseClient
-            .from('products')
-            .select('*', { count: 'exact', head: true });
-        return count > 0;
+        const snapshot = await this.db.collection('products').limit(1).get();
+        return !snapshot.empty;
     }
 };
 

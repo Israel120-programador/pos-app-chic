@@ -109,10 +109,13 @@ const Utils = {
     getPaymentMethodDisplay(method) {
         const methods = {
             'cash': { label: 'Efectivo', icon: '💵' },
+            'efectivo': { label: 'Efectivo', icon: '💵' },
             'card': { label: 'Tarjeta', icon: '💳' },
-            'transfer': { label: 'Transferencia', icon: '📲' }
+            'tarjeta': { label: 'Tarjeta', icon: '💳' },
+            'transfer': { label: 'Transferencia', icon: '📲' },
+            'transferencia': { label: 'Transferencia', icon: '📲' }
         };
-        return methods[method] || { label: method, icon: '💰' };
+        return methods[method] || { label: method || 'Desconocido', icon: '💰' };
     },
 
     escapeHtml(str) {

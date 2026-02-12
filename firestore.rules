@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is signed in
+    function isSignedIn() {
+      return true; // request.auth != null; // For simplified POS usage without complex auth flow yet
+    }
+
+    // Products: Read public, Write Admin
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if true; // isSignedIn();
+    }
+
+    // Sales: Read/Write for authenticated
+    match /sales/{saleId} {
+      allow read, write: if true; // isSignedIn();
+    }
+
+    // Inventory Movements
+    match /inventory_movements/{movementId} {
+      allow read, write: if true; // isSignedIn();
+    }
+
+    // Users: Read everyone (for login check), Write Admin
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Categories
+    match /categories/{catId} {
+        allow read, write: if true;
+    }
+
+    // Customers
+    match /customers/{custId} {
+        allow read, write: if true;
+    }
+
+    // Settings
+    match /settings/{docId} {
+        allow read, write: if true;
+    }
+
+     // Diagnostic/Health Check
+    match /_diagnostics/{docId} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -1,469 +1,493 @@
-/* =====================================================
-   POS APP - POINT OF SALE MODULE
-   ===================================================== */
+// js/pos.js
+// Controlador de la pantalla de Punto de Venta (POS)
 
-const POS = {
-    cart: [],
-    currentCategory: null, // null = root
-    categoryPath: [], // Stack of category IDs
-    categoriesCache: [],
-    productsCache: [],
-    currentProofImage: null, // For payment proof image
+class POSScreen {
+    constructor() {
+        this.cart = [];
+        this.currentCategory = 'all'; // 'all' o ID de categoría
+        this.searchQuery = '';
+    }
 
-    async init() {
+    // ========== INICIALIZACIÓN ==========
+    init() {
+        console.log('🚀 Iniciando POS Screen...');
         this.bindEvents();
-        await this.loadCategories();
-        this.productsCache = await DB.getAll('products');
-        this.renderCategories(); // Start at root
-    },
 
+        // Render inicial (esperar a que lleguen datos de servicios)
+        setTimeout(() => {
+            this.renderProducts();
+        }, 500);
+
+        // Escuchar cambios en productos para actualizar stock en tiempo real
+        if (window.productsService) {
+            window.productsService.addListener(() => {
+                this.renderProducts();
+            });
+        }
+    }
+
+    // ========== EVENT LISTENERS ==========
     bindEvents() {
-        document.getElementById('clear-cart')?.addEventListener('click', () => this.clearCart());
-        document.getElementById('process-payment')?.addEventListener('click', () => this.openPaymentModal());
-        document.getElementById('product-search')?.addEventListener('input',
-            Utils.debounce(() => this.filterProducts(), 300));
-        document.getElementById('confirm-payment')?.addEventListener('click', () => this.processPayment());
-
-        // Payment method selection
-        document.querySelectorAll('.payment-option').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.payment-option').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                const section = document.getElementById('cash-payment-section');
-                section.style.display = btn.dataset.method === 'cash' ? 'block' : 'none';
-            });
+        // Buscador
+        document.getElementById('product-search')?.addEventListener('input', (e) => {
+            this.searchQuery = e.target.value.trim().toLowerCase();
+            this.renderProducts();
         });
 
-        // Quick amounts
-        document.querySelectorAll('.quick-amount').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.getElementById('cash-received').value = btn.dataset.amount;
-                this.updateChange();
-            });
-        });
+        // Grid de productos (Delegación)
+        const grid = document.getElementById('pos-products-grid');
+        grid?.addEventListener('click', (e) => {
+            // Click en Categoría
+            const categoryCard = e.target.closest('.category-folder');
+            if (categoryCard) {
+                const catId = categoryCard.dataset.categoryId;
+                this.setCategory(catId);
+                return;
+            }
 
-        document.getElementById('cash-received')?.addEventListener('input', () => this.updateChange());
+            // Click en "Atrás" (Categoría)
+            const backCard = e.target.closest('.back-card');
+            if (backCard) {
+                this.setCategory('all');
+                return;
+            }
 
-        // Payment proof image handling
-        document.getElementById('payment-proof-image')?.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    this.currentProofImage = event.target.result;
-                    document.getElementById('payment-proof-status').textContent = '✓ ' + file.name;
-                };
-                reader.readAsDataURL(file);
+            // Click en Producto
+            const productCard = e.target.closest('.product-card');
+            if (productCard && !productCard.classList.contains('category-folder') && !productCard.classList.contains('back-card')) {
+                const prodId = productCard.dataset.productId;
+                if (!productCard.classList.contains('out-of-stock')) {
+                    this.addToCart(prodId);
+                } else {
+                    window.Utils?.showToast('Producto sin stock', 'warning');
+                }
             }
         });
-    },
 
-    async loadCategories() {
-        this.categoriesCache = await DB.getAll('categories');
-    },
+        // Botones del Carrito
+        document.getElementById('clear-cart')?.addEventListener('click', () => this.clearCart());
+        document.getElementById('process-payment')?.addEventListener('click', () => this.openPaymentModal());
 
-    /**
-     * Renders categories or products based on current level
-     */
-    renderCategories() {
-        const container = document.getElementById('category-tabs'); // We'll reuse this container contextually or rename it in logic
-        // Ideally we should have a breadcrumb
-
-        let parentId = this.currentCategory;
-
-        // Filter categories belonging to current level
-        // Root: parent_id is null or empty
-        // Child: parent_id matches currentCategory
-        let children = this.categoriesCache.filter(c => {
-            if (!parentId || parentId === 'all') return !c.parent_id || c.parent_id === 'null' || c.parent_id === '';
-            return c.parent_id === parentId;
+        // Modal de Pago
+        document.querySelector('.payment-options')?.addEventListener('click', (e) => {
+            const btn = e.target.closest('.payment-option');
+            if (btn) {
+                this.selectPaymentMethod(btn.dataset.method);
+            }
         });
 
-        // Setup Main Grid Area for Navigation (Replacing old product grid logic basically)
-        // We need to decide: Do we show Categories mixed with Products? Or only Categories until leaf?
-        // Plan:
-        // 1. Show Children Categories (folders) - as cards at root, as table inside
-        // 2. Show Products (items) belonging to current category
+        // Montos rápidos
+        // Montos rápidos
+        document.querySelector('.quick-amounts')?.addEventListener('click', (e) => {
+            if (e.target.classList.contains('quick-amount')) {
+                const amountData = e.target.dataset.amount;
+                const input = document.getElementById('cash-received');
 
-        // This requires unified rendering. Let's use 'pos-products-grid' for EVERYTHING.
-        const grid = document.getElementById('pos-products-grid');
-        grid.innerHTML = '';
-
-        // Add "Back" button if not at root
-        if (this.categoryPath.length > 0) {
-            grid.innerHTML += `
-                <div class="product-card back-card" onclick="POS.goBack()" style="background:var(--bg-tertiary); border-style:dashed;">
-                    <div class="product-card-image" style="font-size: 2em;">🔙</div>
-                    <div class="product-card-name">Atrás</div>
-                </div>
-           `;
-        }
-
-        // Check if we're at ROOT or inside a category
-        const isAtRoot = !parentId || parentId === 'all';
-
-        if (isAtRoot) {
-            // ROOT LEVEL: Show categories as visual CARDS with photos
-            children.sort((a, b) => a.name.localeCompare(b.name)).forEach(c => {
-                let iconHtml = '';
-                if (c.image) {
-                    iconHtml = `<div class="product-card-image" style="padding:0;"><img src="${c.image}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" alt="cat"></div>`;
+                if (amountData === 'exact') {
+                    const total = this.cart.reduce((sum, item) => sum + item.subtotal, 0);
+                    input.value = total;
                 } else {
-                    iconHtml = `<div class="product-card-image" style="background:${c.color}20; color:${c.color}">${c.icon || '📁'}</div>`;
+                    input.value = parseInt(amountData);
                 }
-
-                grid.innerHTML += `
-                    <div class="product-card category-folder" onclick="POS.selectCategory('${c.id}')" style="border-bottom: 3px solid ${c.color}">
-                        ${iconHtml}
-                        <div class="product-card-name">${Utils.escapeHtml(c.name)}</div>
-                        <div class="product-card-price" style="color:var(--text-secondary); font-size:0.8em">Categoría</div>
-                    </div>
-                `;
-            });
-        } else if (children.length > 0) {
-            // INSIDE A CATEGORY: Show subcategories as TABLE (Excel style)
-            grid.innerHTML += `
-                <div class="subcategories-table-container" style="grid-column: 1 / -1; overflow-x:auto;">
-                    <table class="data-table" style="width:100%; font-size:0.95em;">
-                        <thead>
-                            <tr style="background:var(--bg-secondary);">
-                                <th style="padding:10px; text-align:left;">Subcategoría</th>
-                                <th style="padding:10px; text-align:center; width:100px;">Acción</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${children.sort((a, b) => a.name.localeCompare(b.name)).map(c => `
-                                <tr style="border-bottom:1px solid var(--border-color); cursor:pointer;" onclick="POS.selectCategory('${c.id}')">
-                                    <td style="padding:10px;">
-                                        <div style="display:flex; align-items:center; gap:10px;">
-                                            <div style="width:35px; height:35px; border-radius:6px; background:${c.color}20; color:${c.color}; display:flex; align-items:center; justify-content:center; font-size:1.2em;">
-                                                ${c.icon || '📁'}
-                                            </div>
-                                            <div style="font-weight:500; font-size:1em;">${Utils.escapeHtml(c.name)}</div>
-                                        </div>
-                                    </td>
-                                    <td style="padding:10px; text-align:center;">
-                                        <button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); POS.selectCategory('${c.id}')" style="padding:6px 12px;">
-                                            📂 Abrir
-                                        </button>
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-        }
-
-        // Render Products as table when inside a category
-        // Only show products that have a category assigned
-        let products = this.productsCache.filter(p => {
-            // Skip products without category
-            if (!p.category || p.category === '') return false;
-            if (!parentId || parentId === 'all') return false; // At root, only show categories
-            return p.category === parentId;
+                this.updateChange();
+            }
         });
 
-        products = products.filter(p => p.is_active).sort((a, b) => a.name.localeCompare(b.name));
+        // Input Paga con
+        document.getElementById('cash-received')?.addEventListener('input', () => this.updateChange());
 
-        if (products.length > 0 && parentId && parentId !== 'all') {
-            // Table view for products inside a category - simplified, clickable rows
-            grid.innerHTML += `
-                <div class="products-table-container" style="grid-column: 1 / -1; overflow-x:auto;">
-                    <table class="data-table" style="width:100%; font-size:0.9em;">
-                        <thead>
-                            <tr>
-                                <th style="padding:8px;">Producto</th>
-                                <th style="padding:8px; text-align:right;">Precio</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${products.map(p => `
-                                <tr onclick="POS.addToCart('${p.id}')" 
-                                    style="border-bottom:1px solid var(--border-color); cursor:pointer; transition: background 0.2s;"
-                                    onmouseover="this.style.background='var(--bg-tertiary)'" 
-                                    onmouseout="this.style.background=''">
-                                    <td style="padding:10px;">
-                                        <div style="display:flex; align-items:center; gap:10px;">
-                                            <div style="width:40px; height:40px; border-radius:6px; background:var(--bg-tertiary); display:flex; align-items:center; justify-content:center; overflow:hidden;">
-                                                ${p.image ? `<img src="${p.image}" style="width:100%; height:100%; object-fit:cover;">` : '🍔'}
-                                            </div>
-                                            <div style="font-weight:500;">${Utils.escapeHtml(p.name)}</div>
-                                        </div>
-                                    </td>
-                                    <td style="padding:10px; text-align:right; font-weight:600; font-size:1.1em;">${Utils.formatCurrency(p.price)}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-        } else {
-            // Card view for products at root (orphans)
-            products.forEach(p => {
-                grid.innerHTML += `
-                    <div class="product-card ${(p.stock !== undefined && p.stock <= 0) ? 'out-of-stock' : ''}" 
-                         onclick="POS.addToCart('${p.id}')" style="position:relative;">
-                        <button class="btn-edit-image" onclick="event.stopPropagation(); Products.edit('${p.id}')" 
-                                title="Editar Producto" 
-                                style="position:absolute; top:5px; right:5px; background:rgba(0,0,0,0.5); color:white; 
-                                       border:none; border-radius:50%; width:30px; height:30px; cursor:pointer; z-index:10;
-                                       display:flex; align-items:center; justify-content:center; font-size:14px;">
-                            📷
-                        </button>
-                        <div class="product-card-image">
-                            ${p.image ? `<img src="${p.image}" alt="${Utils.escapeHtml(p.name)}">` : '🍔'}
-                        </div>
-                        <div class="product-card-name">${Utils.escapeHtml(p.name)}</div>
-                        <div class="product-card-price">${Utils.formatCurrency(p.price)}</div>
-                    </div>
-                `;
-            });
-        }
+        // Confirmar Pago
+        document.getElementById('confirm-payment')?.addEventListener('click', () => this.processPayment());
 
-        // Update breadcrumb visually if possible (optional)
-        document.getElementById('pos-breadcrumbs')?.remove(); // Cleanup old
-        if (this.categoryPath.length > 0) {
-            const bc = document.createElement('div');
-            bc.id = 'pos-breadcrumbs';
-            bc.className = 'pos-breadcrumbs';
-            bc.style.padding = '10px';
-            bc.innerHTML = '📂 Navegación: / ' + this.categoryPath.map(id => {
-                const c = this.categoriesCache.find(x => x.id === id);
-                return c ? c.name : '...';
-            }).join(' / ');
-            grid.parentElement.insertBefore(bc, grid);
-        }
-    },
+        // Delegación Carrito (Botones + / -)
+        document.getElementById('cart-items')?.addEventListener('click', (e) => {
+            const btn = e.target.closest('button');
+            if (!btn) return;
 
-    selectCategory(id) {
-        this.categoryPath.push(id);
+            const action = btn.dataset.action;
+            const index = parseInt(btn.dataset.index);
+
+            if (action === 'increase') this.updateItemQuantity(index, 1);
+            if (action === 'decrease') this.updateItemQuantity(index, -1);
+            // if (action === 'remove') this.removeFromCart(index); 
+        });
+    }
+
+    setCategory(id) {
         this.currentCategory = id;
-        this.renderCategories();
-    },
+        this.renderProducts();
+    }
 
-    goBack() {
-        this.categoryPath.pop();
-        this.currentCategory = this.categoryPath.length > 0 ? this.categoryPath[this.categoryPath.length - 1] : null;
-        this.renderCategories();
-    },
+    // ========== GESTIÓN DE PRODUCTOS ==========
+    renderProducts() {
+        const grid = document.getElementById('pos-products-grid');
+        if (!grid) return;
 
-    // Override old methods to be safe
-    loadProducts() { this.renderCategories(); },
-    filterProducts() {
-        // Search functionality needs to override hierarchy temporarily
-        const search = document.getElementById('product-search')?.value.toLowerCase() || '';
-        if (!search) {
-            this.renderCategories();
+        grid.innerHTML = '';
+        let products = window.productsService ? window.productsService.getProducts() : [];
+
+        // 1. Si hay búsqueda, mostrar productos filtrados (sin carpetas)
+        if (this.searchQuery) {
+            products = products.filter(p => p.nombre.toLowerCase().includes(this.searchQuery));
+            if (products.length === 0) {
+                grid.innerHTML = `<div class="no-results">No se encontraron productos para "${this.searchQuery}"</div>`;
+                return;
+            }
+            this.renderProductCards(grid, products);
             return;
         }
 
-        const grid = document.getElementById('pos-products-grid');
-        grid.innerHTML = '';
+        // 2. Si es vista 'all', mostrar CARPETAS DE CATEGORÍAS
+        if (this.currentCategory === 'all') {
+            const categories = window.categoriesService?.categories || [];
 
-        const matches = this.productsCache.filter(p => p.name.toLowerCase().includes(search) && p.is_active);
-        matches.forEach(p => {
-            grid.innerHTML += `
-                <div class="product-card ${(p.stock !== undefined && p.stock <= 0) ? 'out-of-stock' : ''}" 
-                     onclick="POS.addToCart('${p.id}')" style="position:relative;">
-                    <button class="btn-edit-image" onclick="event.stopPropagation(); Products.edit('${p.id}')" 
-                            title="Editar Producto" 
-                            style="position:absolute; top:5px; right:5px; background:rgba(0,0,0,0.5); color:white; 
-                                   border:none; border-radius:50%; width:30px; height:30px; cursor:pointer; z-index:10;
-                                   display:flex; align-items:center; justify-content:center; font-size:14px;">
-                        📷
-                    </button>
-                    <div class="product-card-image">
-                        ${p.image ? `<img src="${p.image}" alt="${Utils.escapeHtml(p.name)}">` : '🍔'}
+            // Render "Sin Categoría" folder if there are loose products
+            const looseProducts = products.filter(p => !p.categoriaId && !p.categoria);
+
+            categories.forEach(cat => {
+                const count = products.filter(p => p.categoriaId === cat.id || p.categoria === cat.nombre).length;
+                grid.innerHTML += `
+                    <div class="category-folder" data-category-id="${cat.id}" style="border-left: 5px solid ${cat.color || '#3498db'}">
+                        <div class="folder-icon">${cat.icon || '📁'}</div>
+                        <div class="folder-name">${cat.nombre}</div>
+                        <div class="folder-count">${count} items</div>
                     </div>
-                    <div class="product-card-name">${Utils.escapeHtml(p.name)}</div>
-                    <div class="product-card-price">${Utils.formatCurrency(p.price)}</div>
-                </div>
-            `;
-        });
-    },
+                `;
+            });
 
+            // Optional: "All Products" or "Misc" folder
+            if (looseProducts.length > 0) {
+                grid.innerHTML += `
+                    <div class="category-folder" data-category-id="uncategorized" style="border-left: 5px solid #95a5a6">
+                        <div class="folder-icon">📦</div>
+                        <div class="folder-name">Sin Categoría</div>
+                        <div class="folder-count">${looseProducts.length} items</div>
+                    </div>
+                `;
+            }
+            // Si no hay categorías ni productos sueltos
+            if (categories.length === 0 && looseProducts.length === 0) {
+                grid.innerHTML += `<div class="no-results">No hay productos ni categorías configuradas</div>`;
+            }
+
+            return;
+        }
+
+        if (this.currentCategory === 'uncategorized') {
+            products = products.filter(p => !p.categoriaId && !p.categoria);
+        } else {
+            // Robust Filter: Match ID OR Name (for legacy products)
+            const catObj = window.categoriesService?.categories?.find(c => c.id === this.currentCategory);
+            const catName = catObj ? (catObj.nombre || catObj.name) : '';
+
+            products = products.filter(p =>
+                p.categoriaId === this.currentCategory ||
+                p.categoria === this.currentCategory ||
+                (catName && p.categoria === catName)
+            );
+        }
+
+        products.sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+        // USE NEW LIST VIEW
+        this.renderCategoryView(grid, products);
+    }
+
+    goBack() {
+        this.currentCategory = null;
+
+        // Reset grid styles from list view
+        const grid = document.getElementById('pos-products-grid');
+        if (grid) {
+            grid.classList.add('product-grid');
+            grid.style.display = 'grid'; // Restore grid
+            grid.style.height = 'auto';
+        }
+
+        this.renderProductPage();
+    }
+
+    renderCategoryView(container, products) {
+        container.classList.remove('product-grid'); // Remove grid layout if applied
+        container.style.display = 'block'; // Ensure block display for full height
+        container.style.height = '100%';
+
+        if (products.length === 0) {
+            container.innerHTML = `
+                <div class="category-view-container">
+                    <div class="category-back-column" onclick="window.posScreen.goBack()">
+                        <div class="back-icon">⬅️</div>
+                        <div class="back-text">Atrás</div>
+                    </div>
+                    <div class="category-list-column" style="align-items:center; justify-content:center; color:#64748b;">
+                        <h3>No hay productos en esta categoría</h3>
+                    </div>
+                </div>`;
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="category-view-container">
+                <!-- Left: Back Button -->
+                <div class="category-back-column" onclick="window.posScreen.goBack()">
+                    <div class="back-icon">⬅️</div>
+                    <div class="back-text">Atrás</div>
+                </div>
+
+                <!-- Right: Product List -->
+                <div class="category-list-column">
+                    <div class="product-list-header">
+                        <span>Producto</span>
+                        <span>Precio</span>
+                    </div>
+                    <div class="product-list-scroll">
+                        ${products.map(p => {
+            const hasStock = (p.stock || 0) > 0;
+            const stockClass = hasStock ? '' : 'out-of-stock';
+            return `
+                            <div class="product-list-item ${stockClass}" onclick="window.posScreen.addToCart('${p.id}')">
+                                <div class="product-list-info">
+                                    <div class="product-list-icon">
+                                        ${p.imagen ? `<img src="${p.imagen}" style="width:40px;height:40px;border-radius:4px;object-fit:cover;">` : '🍔'}
+                                    </div>
+                                    <div class="product-list-name">${p.nombre}</div>
+                                </div>
+                                <div class="product-list-price">
+                                    ${window.Utils ? window.Utils.formatCurrency(p.precio) : '$' + p.precio}
+                                </div>
+                            </div>
+                            `;
+        }).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    renderProductCards(container, products) {
+        products.forEach(p => {
+            const hasStock = (p.stock || 0) > 0;
+            const stockClass = hasStock ? '' : 'out-of-stock';
+            const stockLabel = hasStock ? `Stock: ${p.stock}` : 'AGOTADO';
+            const categoryName = window.categoriesService?.categories?.find(c => c.id === p.categoriaId)?.nombre || p.categoria || '';
+
+            container.innerHTML += `
+                <div class="product-card ${stockClass}" data-product-id="${p.id}">
+                    <div class="product-card-image">
+                        ${p.imagen ? `<img src="${p.imagen}" alt="${p.nombre}">` : '🍔'}
+                    </div>
+                    <div class="product-card-name">${p.nombre}</div>
+                    <div style="font-size: 0.75em; color: var(--text-secondary); margin-bottom: 2px;">${categoryName}</div>
+                    <div class="product-card-price">${window.Utils ? window.Utils.formatCurrency(p.precio) : '$' + p.precio}</div>
+                    <div class="product-card-stock ${stockClass}">${stockLabel}</div>
+                </div>`;
+        });
+    }
+
+    // ========== CARRITO ==========
     addToCart(productId) {
-        const product = this.productsCache.find(p => p.id === productId);
+        const product = window.productsService.getProduct(productId);
         if (!product) return;
 
-        const existing = this.cart.find(item => item.product_id === productId);
-        if (existing) {
-            existing.quantity++;
-            existing.subtotal = existing.quantity * existing.unit_price;
+        // Verificar stock localmente primero
+        const currentInCart = this.cart.find(item => item.productId === productId);
+        const qtyInCart = currentInCart ? currentInCart.cantidad : 0;
+
+        if ((product.stock || 0) - qtyInCart <= 0) {
+            window.Utils?.showToast('No hay suficiente stock disponible', 'warning');
+            return;
+        }
+
+        if (currentInCart) {
+            currentInCart.cantidad++;
+            currentInCart.subtotal = currentInCart.cantidad * currentInCart.precio;
         } else {
             this.cart.push({
-                product_id: productId,
-                product_name: product.name,
-                quantity: 1,
-                unit_price: product.price,
-                subtotal: product.price,
-                modifiers: []
+                productId: product.id,
+                nombre: product.nombre,
+                precio: product.precio,
+                costo: product.costo || 0,
+                cantidad: 1,
+                subtotal: product.precio
             });
         }
-        this.renderCart();
-    },
 
-    updateQuantity(productId, delta) {
-        const item = this.cart.find(i => i.product_id === productId);
+        this.renderCart();
+    }
+
+    updateItemQuantity(index, delta) {
+        const item = this.cart[index];
         if (!item) return;
 
-        item.quantity += delta;
-        if (item.quantity <= 0) {
-            this.cart = this.cart.filter(i => i.product_id !== productId);
-        } else {
-            item.subtotal = item.quantity * item.unit_price;
+        // Verificar stock al aumentar
+        if (delta > 0) {
+            const product = window.productsService.getProduct(item.productId);
+            if (product && (product.stock || 0) - item.cantidad <= 0) {
+                window.Utils?.showToast('No hay más stock disponible', 'warning');
+                return;
+            }
         }
+
+        item.cantidad += delta;
+
+        if (item.cantidad <= 0) {
+            this.cart.splice(index, 1);
+        } else {
+            item.subtotal = item.cantidad * item.precio;
+        }
+
         this.renderCart();
-    },
-
-    renderCart() {
-        const container = document.getElementById('cart-items');
-
-        if (this.cart.length === 0) {
-            container.innerHTML = `<div class="cart-empty"><span>🛒</span><p>Carrito vacío</p></div>`;
-        } else {
-            container.innerHTML = `
-                <table class="cart-table" style="width:100%; border-collapse:collapse; font-size:0.85em;">
-                    <thead>
-                        <tr style="background:var(--bg-secondary); text-align:left;">
-                            <th style="padding:6px 4px; border-bottom:1px solid var(--border-color);">Producto</th>
-                            <th style="padding:6px 4px; border-bottom:1px solid var(--border-color); text-align:center; width:80px;">Cant.</th>
-                            <th style="padding:6px 4px; border-bottom:1px solid var(--border-color); text-align:right;">Subtotal</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${this.cart.map(item => `
-                            <tr style="border-bottom:1px solid var(--border-color);">
-                                <td style="padding:6px 4px;">
-                                    <div style="font-weight:500;">${Utils.escapeHtml(item.product_name)}</div>
-                                    <div style="font-size:0.8em; color:var(--text-secondary);">${Utils.formatCurrency(item.unit_price)} c/u</div>
-                                </td>
-                                <td style="padding:6px 4px; text-align:center;">
-                                    <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
-                                        <button onclick="POS.updateQuantity('${item.product_id}', -1)" 
-                                                style="width:24px; height:24px; border:1px solid var(--border-color); background:var(--bg-tertiary); border-radius:4px; cursor:pointer;">−</button>
-                                        <span style="min-width:20px; text-align:center; font-weight:600;">${item.quantity}</span>
-                                        <button onclick="POS.updateQuantity('${item.product_id}', 1)" 
-                                                style="width:24px; height:24px; border:1px solid var(--border-color); background:var(--bg-tertiary); border-radius:4px; cursor:pointer;">+</button>
-                                    </div>
-                                </td>
-                                <td style="padding:6px 4px; text-align:right; font-weight:600;">${Utils.formatCurrency(item.subtotal)}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            `;
-        }
-
-        this.updateTotals();
-    },
-
-    updateTotals() {
-        const total = this.cart.reduce((sum, item) => sum + item.subtotal, 0);
-        const { subtotal, tax } = Utils.calculateTotals(total);
-
-        document.getElementById('cart-subtotal').textContent = Utils.formatCurrency(subtotal);
-        document.getElementById('cart-tax').textContent = Utils.formatCurrency(tax);
-        document.getElementById('cart-total').textContent = Utils.formatCurrency(total);
-    },
+    }
 
     clearCart() {
         this.cart = [];
         this.renderCart();
-    },
+    }
 
+    renderCart() {
+        const container = document.getElementById('cart-items');
+        if (!container) return;
+
+        if (this.cart.length === 0) {
+            container.innerHTML = `
+                <div class="cart-empty">
+                    <div style="font-size:2em; margin-bottom:10px;">🛒</div>
+                    <p>Carrito vacío</p>
+                </div>`;
+        } else {
+            container.innerHTML = `
+                <table class="cart-table">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th class="text-center">Cant.</th>
+                            <th class="text-right">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${this.cart.map((item, index) => `
+                            <tr>
+                                <td>
+                                    <div class="fw-500">${item.nombre}</div>
+                                    <div class="text-muted text-sm">${window.Utils?.formatCurrency(item.precio)}</div>
+                                </td>
+                                <td class="text-center">
+                                    <div class="quantity-controls">
+                                        <button data-action="decrease" data-index="${index}">−</button>
+                                        <span>${item.cantidad}</span>
+                                        <button data-action="increase" data-index="${index}">+</button>
+                                    </div>
+                                </td>
+                                <td class="text-right fw-600">${window.Utils?.formatCurrency(item.subtotal)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>`;
+        }
+
+        this.updateTotals();
+    }
+
+    updateTotals() {
+        const total = this.cart.reduce((sum, item) => sum + item.subtotal, 0);
+        // Asumiendo IVA incluido para simplificar visualización
+        const subtotal = Math.round(total / 1.19);
+        const tax = total - subtotal;
+
+        document.getElementById('cart-subtotal').textContent = window.Utils?.formatCurrency(subtotal);
+        document.getElementById('cart-tax').textContent = window.Utils?.formatCurrency(tax);
+        document.getElementById('cart-total').textContent = window.Utils?.formatCurrency(total);
+
+        // Disable pay button if 0
+        const payBtn = document.getElementById('process-payment');
+        if (payBtn) {
+            payBtn.disabled = total === 0;
+            if (total > 0) {
+                payBtn.innerHTML = `💳 Pagar ${window.Utils?.formatCurrency(total)}`;
+            } else {
+                payBtn.innerHTML = `💳 Pagar`;
+            }
+        }
+    }
+
+    // ========== PAGO ==========
     openPaymentModal() {
         if (this.cart.length === 0) {
-            Utils.showToast('El carrito está vacío', 'warning');
+            window.Utils?.showToast('El carrito está vacío', 'warning');
             return;
         }
 
         const total = this.cart.reduce((sum, item) => sum + item.subtotal, 0);
-        document.getElementById('payment-total-amount').textContent = Utils.formatCurrency(total);
+        document.getElementById('payment-total-amount').textContent = window.Utils?.formatCurrency(total);
+
+        // Reset UI
+        this.selectPaymentMethod('cash');
         document.getElementById('cash-received').value = '';
         document.getElementById('change-amount').textContent = '$0';
         document.getElementById('payment-comments').value = '';
-        // Reset proof image
-        this.currentProofImage = null;
-        const proofInput = document.getElementById('payment-proof-image');
-        if (proofInput) proofInput.value = '';
-        document.getElementById('payment-proof-status').textContent = 'Sin archivo';
+
         document.getElementById('payment-modal').classList.add('active');
-    },
+    }
+
+    selectPaymentMethod(method) {
+        document.querySelectorAll('.payment-option').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.method === method);
+        });
+
+        const cashSection = document.getElementById('cash-payment-section');
+        if (cashSection) {
+            cashSection.style.display = (method === 'cash' || method === 'efectivo') ? 'block' : 'none';
+        }
+    }
 
     updateChange() {
         const total = this.cart.reduce((sum, item) => sum + item.subtotal, 0);
         const received = parseInt(document.getElementById('cash-received').value) || 0;
         const change = Math.max(0, received - total);
-        document.getElementById('change-amount').textContent = Utils.formatCurrency(change);
-    },
+        document.getElementById('change-amount').textContent = window.Utils?.formatCurrency(change);
+    }
 
     async processPayment() {
-        const total = this.cart.reduce((sum, item) => sum + item.subtotal, 0);
-        const { subtotal, tax } = Utils.calculateTotals(total);
-        const paymentMethod = document.querySelector('.payment-option.active')?.dataset.method || 'cash';
-        const comments = document.getElementById('payment-comments').value.trim();
+        const methodBtn = document.querySelector('.payment-option.active');
+        const metodoPago = methodBtn ? methodBtn.dataset.method : 'cash';
+        const notas = document.getElementById('payment-comments').value;
+        const currentUser = window.usersService?.getCurrentUser();
 
-        if (paymentMethod === 'cash') {
+        // Validar pago en efectivo
+        if (metodoPago === 'cash' || metodoPago === 'efectivo') {
+            const total = this.cart.reduce((sum, item) => sum + item.subtotal, 0);
             const received = parseInt(document.getElementById('cash-received').value) || 0;
             if (received < total) {
-                Utils.showToast('Monto insuficiente', 'error');
+                window.Utils?.showToast('El monto recibido es insuficiente', 'error');
                 return;
             }
         }
 
-        const currentUser = App.currentUser;
-        const sale = {
-            id: 'sale_' + Utils.generateUUID(),
-            order_number: Utils.generateShortId(),
-            timestamp: Utils.now(),
-            total,
-            subtotal,
-            tax,
-            payment_method: paymentMethod,
-            customer_id: null,
-            cashier_id: currentUser?.id || null,
-            device_id: 'default',
-            items: Utils.deepClone(this.cart),
-            comments,
-            proof_image: this.currentProofImage || null,
-            status: 'completed', // completed for finished sales
-            sync_status: 'PENDING',
-            created_at_local: Utils.now()
+        const saleData = {
+            items: this.cart,
+            metodoPago,
+            notas,
+            vendedor: currentUser?.nombre || 'Desconocido',
+            vendedorId: currentUser?.id || 'unknown',
+            descuento: 0,
+            imprimirRecibo: true
         };
 
-        // Save sale
-        await DB.add('sales', sale);
-        await DB.queueSync('CREATE_SALE', 'sales', sale.id, sale);
-
-        // Sync with cloud immediately if online
-        if (typeof Sync !== 'undefined') {
-            await Sync.pushToCloud('sales', 'CREATE', sale);
-        }
-
-        // Update stock
-        for (const item of this.cart) {
-            const product = await DB.get('products', item.product_id);
-            if (product && product.stock !== undefined) {
-                product.stock -= item.quantity;
-                product.updated_at = Utils.now();
-                await DB.put('products', product);
-            }
-        }
-
-        // Close modal and clear cart
+        // Cerrar modal y mostrar indicador
         document.getElementById('payment-modal').classList.remove('active');
-        this.clearCart();
 
-        // Print receipts
-        const settings = await DB.get('settings', 'default');
-        if (settings?.print_receipts !== false) {
-            await Receipts.printDualReceipt(sale, currentUser?.name);
+        const result = await window.salesService.createSale(saleData);
+
+        if (result.success) {
+            window.Utils?.showToast('Venta realizada con éxito', 'success');
+            this.clearCart();
+        } else {
+            console.error(result.error);
+            window.Utils?.showToast('Error al procesar venta: ' + result.error, 'error');
         }
-
-        Utils.showToast('Venta procesada correctamente', 'success');
-        Sales.loadSales();
-        Inventory.loadAll(); // Refresh chart after sale
     }
-};
+}
+
+// Crear instancia global
+window.posScreen = new POSScreen();
+console.log('✅ POSScreen inicializado');

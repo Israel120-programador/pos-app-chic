@@ -1,197 +1,215 @@
-/* =====================================================
-   POS APP - CATEGORIES MODULE (Enhanced with Products View)
-   ===================================================== */
+// js/categories.js
+// Gestión de categorías con sincronización Firebase
 
-const Categories = {
+// Use window.FirebaseConfig directly to avoid const redeclaration in global scope
+
+class CategoriesService {
+    constructor() {
+        const { db } = window.FirebaseConfig;
+        this.categoriesRef = db.collection('categorias');
+        this.categories = [];
+        this.unsubscribe = null;
+    }
+
+    // ========== INICIALIZAR ==========
     async init() {
         this.bindEvents();
-        await this.loadCategories();
-    },
+        // Comenzar a escuchar cambios
+        this.startListening();
+    }
 
+    // ========== BIND EVENTS ==========
     bindEvents() {
+        // Eventos UI para gestión de categorías (si existen los elementos)
         document.getElementById('add-category-btn')?.addEventListener('click', () => this.openModal());
         document.getElementById('save-category')?.addEventListener('click', () => this.save());
-        document.getElementById('close-category-products')?.addEventListener('click', () => this.closeProductsPanel());
-
-        // Image upload handlers
         document.getElementById('category-image')?.addEventListener('change', (e) => this.handleImageUpload(e));
         document.getElementById('clear-category-image')?.addEventListener('click', () => this.clearImage());
 
-        // Parent Category Selector Filter (in modal)
-        // Not strictly needed as we reload options on open
-    },
+        // Delegación para botones de editar/eliminar en el grid
+        document.getElementById('categories-grid')?.addEventListener('click', (e) => {
+            const btn = e.target.closest('button');
+            if (!btn) return;
 
-    async loadCategories() {
-        const categories = await DB.getAll('categories');
-        const products = await DB.getAll('products');
+            const card = btn.closest('.category-card');
+            const id = card?.dataset.id;
 
-        const countMap = {};
-        products.forEach(p => {
-            countMap[p.category] = (countMap[p.category] || 0) + 1;
+            if (btn.classList.contains('btn-edit')) {
+                e.stopPropagation();
+                this.edit(id);
+            } else if (btn.classList.contains('btn-delete')) {
+                e.stopPropagation();
+                this.delete(id);
+            }
         });
+    }
 
-        const grid = document.getElementById('categories-grid');
-        if (!grid) return;
+    // ========== ESCUCHAR CATEGORÍAS EN TIEMPO REAL ==========
+    startListening(callback) {
+        console.log('👂 Iniciando escucha de categorías...');
 
-        grid.innerHTML = categories.sort((a, b) => a.name.localeCompare(b.name))
-            .map(c => `
-                <div class="category-card" data-id="${c.id}" data-name="${Utils.escapeHtml(c.name)}">
-                    <div class="category-card-actions">
-                        <button class="btn btn-sm btn-secondary btn-icon" onclick="event.stopPropagation(); Categories.edit('${c.id}')">✏️</button>
-                        <button class="btn btn-sm btn-danger btn-icon" onclick="event.stopPropagation(); Categories.delete('${c.id}')">🗑️</button>
-                    </div>
-                    <div class="category-card-icon" style="background: ${c.color}20; color: ${c.color}">
-                        ${c.icon || '📦'}
-                    </div>
-                    <div class="category-card-name">${Utils.escapeHtml(c.name)}</div>
-                    <div class="category-card-count">${countMap[c.id] || 0} productos</div>
-                </div>
-            `).join('');
+        this.unsubscribe = this.categoriesRef
+            .orderBy('nombre', 'asc')
+            .onSnapshot(
+                (snapshot) => {
+                    this.categories = [];
+                    snapshot.forEach((doc) => {
+                        this.categories.push({
+                            id: doc.id,
+                            ...doc.data()
+                        });
+                    });
 
-        // Add click handlers via event delegation
-        grid.querySelectorAll('.category-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const id = card.dataset.id;
-                const name = card.dataset.name;
-                this.showProducts(id, name);
-            });
-        });
-    },
+                    console.log(`📂 Categorías actualizadas: ${this.categories.length}`);
 
-    async showProducts(categoryId, categoryName) {
-        const products = await DB.getAll('products');
-        const filtered = products.filter(p => p.category === categoryId);
+                    // Actualizar UI si es necesario
+                    this.renderCategoriesGrid();
 
-        const panel = document.getElementById('category-products-panel');
-        const title = document.getElementById('category-products-title');
-        const grid = document.getElementById('category-products-grid');
+                    if (window.posScreen && window.posScreen.renderProducts) {
+                        window.posScreen.renderProducts();
+                    }
 
-        if (!panel || !title || !grid) {
-            console.error('Category products panel not found');
+                    // Update Catalog UI if active
+                    if (window.CatalogUI && window.CatalogUI.loadProducts) {
+                        // We just want to refresh the select boxes, but loadProducts does that.
+                        window.CatalogUI.loadProducts();
+                    }
+
+                    if (callback) callback(this.categories);
+
+                    window.FirebaseConfig.showSyncIndicator('✓ Categorías sincronizadas');
+                },
+                (error) => {
+                    console.error('❌ Error escuchando categorías:', error);
+                    window.FirebaseConfig.handleFirebaseError(error, 'categorías');
+                }
+            );
+    }
+
+    stopListening() {
+        if (this.unsubscribe) {
+            this.unsubscribe();
+        }
+    }
+
+    // ========== OBTENER CATEGORÍAS (Cache) ==========
+    getCategories() {
+        return this.categories;
+    }
+
+    // ========== GUARDAR / ACTUALIZAR ==========
+    async save() {
+        const id = document.getElementById('category-id').value;
+        const nombre = document.getElementById('category-name').value.trim();
+        const color = document.getElementById('category-color').value;
+        const icon = document.getElementById('category-icon').value.trim();
+
+        if (!nombre) {
+            window.Utils?.showToast('El nombre es requerido', 'error');
             return;
         }
 
-        title.textContent = `📦 ${categoryName} (${filtered.length} productos)`;
+        window.FirebaseConfig.showSyncIndicator('Guardando categoría...');
 
-        grid.innerHTML = filtered.sort((a, b) => a.name.localeCompare(b.name))
-            .map(p => `
-                <div class="product-card ${(p.stock !== undefined && p.stock <= 0) ? 'out-of-stock' : ''}">
-                    <div class="product-card-image">
-                        ${p.image ? `<img src="${p.image}" alt="${Utils.escapeHtml(p.name)}">` : '📦'}
-                    </div>
-                    <div class="product-card-name">${Utils.escapeHtml(p.name)}</div>
-                    <div class="product-card-price">${Utils.formatCurrency(p.price)}</div>
-                    <div class="product-card-stock">Stock: ${p.stock ?? 0}</div>
+        try {
+            const categoryData = {
+                nombre,
+                color,
+                icon: icon || '📦',
+                imagen: this.currentImageData || null,
+                ultimaModificacion: window.FirebaseConfig.serverTimestamp()
+            };
+
+            if (id) {
+                // Actualizar
+                await this.categoriesRef.doc(id).update(categoryData);
+                window.Utils?.showToast('Categoría actualizada', 'success');
+            } else {
+                // Crear
+                categoryData.fechaCreacion = window.FirebaseConfig.serverTimestamp();
+                categoryData.activo = true;
+                await this.categoriesRef.add(categoryData);
+                window.Utils?.showToast('Categoría creada', 'success');
+            }
+
+            document.getElementById('category-modal').classList.remove('active');
+
+        } catch (error) {
+            window.FirebaseConfig.handleFirebaseError(error, 'guardar categoría');
+        }
+    }
+
+    // ========== EDITAR (Abrir Modal) ==========
+    edit(id) {
+        const category = this.categories.find(c => c.id === id);
+        if (!category) return;
+
+        this.openModal(category);
+    }
+
+    // ========== ELIMINAR ==========
+    async delete(id) {
+        if (!confirm('¿Eliminar esta categoría?')) return;
+
+        try {
+            window.FirebaseConfig.showSyncIndicator('Eliminando categoría...');
+            await this.categoriesRef.doc(id).delete();
+            window.Utils?.showToast('Categoría eliminada', 'success');
+        } catch (error) {
+            window.FirebaseConfig.handleFirebaseError(error, 'eliminar categoría');
+        }
+    }
+
+    // ========== RENDERIZAR GRID (Gestión) ==========
+    renderCategoriesGrid() {
+        const grid = document.getElementById('categories-grid');
+        if (!grid) return;
+
+        grid.innerHTML = this.categories.map(c => `
+            <div class="category-card" data-id="${c.id}">
+                <div class="category-card-actions">
+                    <button class="btn btn-sm btn-secondary btn-icon btn-edit">✏️</button>
+                    <button class="btn btn-sm btn-danger btn-icon btn-delete">🗑️</button>
                 </div>
-            `).join('') || '<p class="text-muted text-center">No hay productos en esta categoría</p>';
+                <div class="category-card-icon" style="background: ${c.color}20; color: ${c.color}">
+                    ${c.icon || '📦'}
+                </div>
+                <div class="category-card-name">${c.nombre}</div>
+            </div>
+        `).join('');
+    }
 
-        panel.classList.remove('hidden');
-    },
-
-    closeProductsPanel() {
-        document.getElementById('category-products-panel').classList.add('hidden');
-    },
-
-    async openModal(category = null) {
+    // ========== HELPERS MODAL ==========
+    openModal(category = null) {
         const modal = document.getElementById('category-modal');
+        if (!modal) return;
+
         document.getElementById('category-modal-title').textContent =
             category ? 'Editar Categoría' : 'Nueva Categoría';
 
         document.getElementById('category-id').value = category?.id || '';
-        document.getElementById('category-name').value = category?.name || '';
+        document.getElementById('category-name').value = category?.nombre || '';
         document.getElementById('category-color').value = category?.color || '#FF6B35';
         document.getElementById('category-icon').value = category?.icon || '';
 
-        // Handle image
+        // Imagen
         const preview = document.getElementById('category-image-preview');
         const clearBtn = document.getElementById('clear-category-image');
 
-        if (category?.image) {
-            preview.src = category.image;
+        if (category?.imagen) {
+            preview.src = category.imagen;
             preview.classList.add('has-image');
-            clearBtn.classList.remove('hidden');
-            this.currentImageData = category.image;
+            clearBtn?.classList.remove('hidden');
+            this.currentImageData = category.imagen;
         } else {
             preview.src = '';
             preview.classList.remove('has-image');
-            clearBtn.classList.add('hidden');
+            clearBtn?.classList.add('hidden');
             this.currentImageData = null;
-        }
-        document.getElementById('category-image').value = '';
-
-        // Load Parent Options
-        const allCategories = await DB.getAll('categories');
-        const parentSelect = document.getElementById('category-parent');
-
-        if (parentSelect) {
-            // Filter out self to avoid cycles if editing
-            const validParents = category
-                ? allCategories.filter(c => c.id !== category.id)
-                : allCategories;
-
-            // Also simplistic cycle prevention: don't allow children of self as parents (recurse if needed, but simple filter is start)
-
-            parentSelect.innerHTML = '<option value="">Ninguna (Categoría Raíz)</option>' +
-                validParents.sort((a, b) => a.name.localeCompare(b.name))
-                    .map(c => `<option value="${c.id}">${Utils.escapeHtml(c.name)}</option>`)
-                    .join('');
-
-            parentSelect.value = category?.parent_id || '';
         }
 
         modal.classList.add('active');
-    },
-
-    async edit(id) {
-        const category = await DB.get('categories', id);
-        if (category) this.openModal(category);
-    },
-
-    async save() {
-        const id = document.getElementById('category-id').value || 'cat_' + Utils.generateUUID();
-        const category = {
-            id,
-            name: document.getElementById('category-name').value.trim(),
-            color: document.getElementById('category-color').value,
-            icon: document.getElementById('category-icon').value.trim(),
-            parent_id: document.getElementById('category-parent')?.value || null,
-            image: this.currentImageData || null,
-            sort_order: 0,
-            created_at: Utils.now()
-        };
-
-        if (!category.name) {
-            Utils.showToast('El nombre es requerido', 'error');
-            return;
-        }
-
-        await DB.put('categories', category);
-
-        // Sync with cloud
-        if (typeof Sync !== 'undefined') {
-            Sync.pushToCloud('categories', 'UPDATE', category);
-        }
-
-        document.getElementById('category-modal').classList.remove('active');
-        await this.loadCategories();
-        POS.loadCategories();
-        Products.loadCategoryFilter();
-        Utils.showToast('Categoría guardada', 'success');
-    },
-
-    async delete(id) {
-        if (!confirm('¿Eliminar esta categoría?')) return;
-        await DB.delete('categories', id);
-
-        // Sync with cloud
-        if (typeof Sync !== 'undefined') {
-            Sync.pushToCloud('categories', 'DELETE', { id });
-        }
-
-        await this.loadCategories();
-        POS.loadCategories();
-        Utils.showToast('Categoría eliminada', 'success');
-    },
+    }
 
     handleImageUpload(e) {
         const file = e.target.files[0];
@@ -204,12 +222,12 @@ const Categories = {
 
             preview.src = event.target.result;
             preview.classList.add('has-image');
-            clearBtn.classList.remove('hidden');
+            clearBtn?.classList.remove('hidden');
 
             this.currentImageData = event.target.result;
         };
         reader.readAsDataURL(file);
-    },
+    }
 
     clearImage() {
         const preview = document.getElementById('category-image-preview');
@@ -219,7 +237,11 @@ const Categories = {
         preview.src = '';
         preview.classList.remove('has-image');
         input.value = '';
-        clearBtn.classList.add('hidden');
+        clearBtn?.classList.add('hidden');
         this.currentImageData = null;
     }
-};
+}
+
+// Crear instancia global
+window.categoriesService = new CategoriesService();
+console.log('✅ CategoriesService inicializado');

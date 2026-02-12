@@ -54,8 +54,9 @@ const Inventory = {
         sales.forEach(sale => {
             sale.items?.forEach(item => {
                 if (!salesByProduct[item.product_id]) {
+                    const product = prodMap[item.product_id];
                     salesByProduct[item.product_id] = {
-                        name: item.product_name,
+                        name: product ? product.name : (item.product_name || 'Producto'),
                         quantity: 0,
                         revenue: 0
                     };
@@ -112,7 +113,7 @@ const Inventory = {
         const chartHeight = height - padding * 2;
 
         data.forEach((item, index) => {
-            const barHeight = (item.quantity / maxValue) * chartHeight;
+            const barHeight = maxValue > 0 ? (item.quantity / maxValue) * chartHeight : 0;
             const x = padding + index * (barWidth + 10);
             const y = height - padding - barHeight;
 
@@ -321,6 +322,12 @@ const Inventory = {
 
         await DB.add('inventory_movements', movement);
         await DB.put('products', product);
+
+        // Sync with cloud
+        if (typeof Sync !== 'undefined') {
+            await Sync.pushToCloud('inventory_movements', 'CREATE', movement);
+            await Sync.pushToCloud('products', 'UPDATE', product);
+        }
 
         document.getElementById('movement-modal').classList.remove('active');
         await this.loadAll();

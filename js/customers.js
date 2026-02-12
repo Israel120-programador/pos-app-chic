@@ -79,6 +79,12 @@ const Customers = {
         if (existing) customer.loyalty_points = existing.loyalty_points;
 
         await DB.put('customers', customer);
+
+        // Sync with cloud
+        if (typeof Sync !== 'undefined') {
+            await Sync.pushToCloud('customers', existing ? 'UPDATE' : 'CREATE', customer);
+        }
+
         document.getElementById('customer-modal').classList.remove('active');
         await this.loadCustomers();
         Utils.showToast('Cliente guardado', 'success');
@@ -86,7 +92,14 @@ const Customers = {
 
     async delete(id) {
         if (!confirm('¿Eliminar este cliente?')) return;
+
         await DB.delete('customers', id);
+
+        // Sync with cloud
+        if (typeof Sync !== 'undefined') {
+            await Sync.pushToCloud('customers', 'DELETE', { id });
+        }
+
         await this.loadCustomers();
         Utils.showToast('Cliente eliminado', 'success');
     }

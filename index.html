@@ -2,10 +2,31 @@
 <html lang="es">
 
 <head>
+    <!-- EMERGENCY: Kill all Service Workers and clear caches FIRST -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function (registrations) {
+                registrations.forEach(function (reg) {
+                    reg.unregister().then(function () {
+                        console.log('💣 SW Unregistered:', reg.scope);
+                    });
+                });
+            });
+            if ('caches' in window) {
+                caches.keys().then(function (names) {
+                    names.forEach(function (name) {
+                        caches.delete(name);
+                        console.log('🗑️ Cache deleted:', name);
+                    });
+                });
+            }
+        }
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#1a1a2e">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="description" content="Sistema de Punto de Venta - POS App">
 
@@ -16,11 +37,52 @@
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     <link rel="stylesheet" href="css/styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Supabase SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Firebase SDK (compat) -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+    <script>
+        // Initialize Firebase
+        firebase.initializeApp({
+            apiKey: "AIzaSyBPRWw64NeCs3L9rVe7WLIyNMHdN-44vvg",
+            authDomain: "chic0123.firebaseapp.com",
+            projectId: "chic0123",
+            storageBucket: "chic0123.firebasestorage.app",
+            messagingSenderId: "577880623151",
+            appId: "1:577880623151:web:a7b683cc4ea97a86565eda",
+            measurementId: "G-JCN7HBNK8B"
+        });
+    </script>
+    <!-- SheetJS for Excel/Sheets import -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 
 <body>
+    <script src="js/debug.js"></script>
+    <!-- Splash Screen Failsafe -->
+    <script>
+        setTimeout(() => {
+            const splash = document.getElementById('splash-screen');
+            if (splash && !splash.classList.contains('hidden')) {
+                console.warn('⚠️ Splash screen timeout - Forcing hide');
+                splash.classList.add('hidden');
+                // Optional: Show a warning toast or message
+                const errDiv = document.createElement('div');
+                errDiv.style.position = 'fixed';
+                errDiv.style.bottom = '20px';
+                errDiv.style.left = '50%';
+                errDiv.style.transform = 'translateX(-50%)';
+                errDiv.style.background = 'rgba(255,0,0,0.8)';
+                errDiv.style.color = 'white';
+                errDiv.style.padding = '10px 20px';
+                errDiv.style.borderRadius = '20px';
+                errDiv.style.zIndex = '9999';
+                errDiv.innerText = 'Carga lenta o incompleta. Si algo falla, recarga.';
+                document.body.appendChild(errDiv);
+                setTimeout(() => errDiv.remove(), 5000);
+            }
+        }, 8000); // 8 seconds failsafe
+    </script>
     <!-- Splash Screen -->
     <div id="splash-screen" class="splash-screen">
         <div class="splash-content">
@@ -101,6 +163,8 @@
             </ul>
 
             <div class="sidebar-footer">
+                <p>Chic 2.0 POS</p>
+                <p class="text-xs text-muted">v3.0.2 (Debug)</p>
                 <div class="sync-status" id="sync-status">
                     <span class="sync-icon">🟢</span>
                     <span class="sync-text">Sincronizado</span>
@@ -177,92 +241,215 @@
                 <div class="section-header">
                     <h1>🏭 Gestión de Inventario</h1>
                     <div class="header-tabs">
-                        <button class="nav-tab active" data-tab="products-tab">Catálogo</button>
+                        <button class="nav-tab active" data-tab="products-tab">Productos</button>
                         <button class="nav-tab" data-tab="categories-tab">Categorías</button>
                     </div>
+                </div>
 
-                    <!-- TAB 1: Products Catalog -->
-                    <div id="products-tab" class="tab-content active">
-                        <div class="tab-header-actions">
-                            <div class="filters-bar">
-                                <input type="text" id="products-search" placeholder="Buscar productos..."
-                                    class="search-input">
-                                <select id="products-category-filter" class="select-input">
-                                    <option value="">Todas las categorías</option>
-                                </select>
-                            </div>
-                            <div class="actions-group">
-                                <button class="btn btn-warning hidden" id="undo-last-action-btn"
-                                    title="Deshacer última acción">↩️ Deshacer</button>
-                                <button class="btn btn-warning hidden" id="undo-import-btn">↩️ Deshacer Import</button>
-                                <button class="btn btn-info" id="import-googlesheets-btn"
-                                    title="Importar desde Google Sheets">📊 Google Sheets</button>
-                                <button class="btn btn-success" id="paste-csv-btn" title="Pegar datos CSV">📋 Pegar
-                                    CSV</button>
-                                <label for="import-products-file" class="btn btn-secondary btn-icon"
-                                    title="Importar CSV">📤</label>
-                                <input type="file" id="import-products-file" accept=".csv,text/csv,text/plain,.txt"
-                                    style="display: none;">
-                                <button class="btn btn-secondary btn-icon" id="export-products-btn"
-                                    title="Exportar">📥</button>
-                                <button class="btn btn-primary" id="add-product-btn">+ Nuevo Producto</button>
-                            </div>
+                <!-- TAB 1: Products Catalog -->
+                <div id="products-tab" class="tab-content active">
+                    <div class="tab-header-actions">
+                        <div class="filters-bar">
+                            <input type="text" id="products-search" placeholder="Buscar productos..."
+                                class="search-input">
+                            <select id="products-category-filter" class="select-input">
+                                <option value="">Todas las categorías</option>
+                            </select>
                         </div>
-
-                        <div class="table-container">
-                            <table class="data-table" id="products-table">
-                                <thead>
-                                    <tr>
-                                        <th>Producto</th>
-                                        <th>Categoría</th>
-                                        <th>Precio</th>
-                                        <th>Costo</th>
-                                        <th>Stock</th>
-                                        <th>Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="products-tbody">
-                                </tbody>
-                            </table>
-                            <div class="pagination-controls" id="products-pagination">
-                                <button class="btn btn-secondary btn-sm" id="load-more-products">Cargar más...</button>
-                            </div>
+                        <div class="actions-group">
+                            <button class="btn btn-warning hidden" id="undo-last-action-btn"
+                                title="Deshacer última acción">↩️ Deshacer</button>
+                            <button class="btn btn-warning hidden" id="undo-import-btn">↩️ Deshacer Import</button>
+                            <button class="btn btn-info" id="import-googlesheets-btn"
+                                title="Importar desde Google Sheets">📊 Google Sheets</button>
+                            <button class="btn btn-success" id="paste-csv-btn" title="Pegar datos CSV">📋 Pegar
+                                CSV</button>
+                            <label for="import-products-file" class="btn btn-secondary btn-icon"
+                                title="Importar CSV / Excel">📤</label>
+                            <input type="file" id="import-products-file"
+                                accept=".csv,.xlsx,.xls,text/csv,text/plain,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                                style="display: none;">
+                            <button class="btn btn-secondary btn-icon" id="export-products-btn"
+                                title="Exportar">📥</button>
+                            <button class="btn btn-primary" id="add-product-btn">+ Nuevo Producto</button>
                         </div>
                     </div>
 
-                    <!-- TAB 2: Categories Management -->
-                    <div id="categories-tab" class="tab-content">
-                        <div class="tab-header-actions">
-                            <div class="filters-bar">
-                                <span class="text-muted">Gestiona las categorías de tus productos</span>
-                            </div>
-                            <div class="actions-group">
-                                <button class="btn btn-primary" id="add-category-btn">+ Nueva Categoría</button>
-                            </div>
+                    <div class="table-container">
+                        <div class="bulk-actions-bar hidden" id="bulk-actions-bar">
+                            <label class="bulk-select-label">
+                                <input type="checkbox" id="select-all-products" onchange="Products.toggleSelectAll()">
+                                Seleccionar todo
+                            </label>
+                            <span class="bulk-count" id="bulk-count">0 seleccionados</span>
+                            <button class="btn btn-danger btn-sm" id="delete-selected-btn"
+                                onclick="Products.deleteSelected()">🗑️ Eliminar seleccionados</button>
                         </div>
-                        <div class="categories-grid" id="categories-grid">
-                            <!-- Categories loaded dynamically -->
-                        </div>
-
-                        <!-- Category Products Panel (Slide-in) -->
-                        <div id="category-products-panel" class="category-products-panel hidden">
-                            <div class="panel-header">
-                                <h3 id="category-products-title">Productos de Categoría</h3>
-                                <button class="btn btn-sm btn-secondary" id="close-category-products">✖️ Cerrar</button>
-                            </div>
-                            <div class="products-grid" id="category-products-grid">
-                            </div>
+                        <table class="data-table" id="products-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:40px;"><input type="checkbox" id="select-all-header"
+                                            onchange="Products.toggleSelectAll()"></th>
+                                    <th>Producto</th>
+                                    <th>Categoría</th>
+                                    <th>Precio</th>
+                                    <th>Costo</th>
+                                    <th>Stock</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="products-tbody">
+                            </tbody>
+                        </table>
+                        <div class="pagination-controls" id="products-pagination">
+                            <button class="btn btn-secondary btn-sm" id="load-more-products">Cargar más...</button>
                         </div>
                     </div>
+                </div>
 
-                    <!-- TAB 3: Stats -->
+                <!-- TAB 2: Categories Management -->
+                <div id="categories-tab" class="tab-content">
+                    <div class="tab-header-actions">
+                        <div class="filters-bar">
+                            <span class="text-muted">Gestiona las categorías de tus productos</span>
+                        </div>
+                        <div class="actions-group">
+                            <button class="btn btn-primary" id="add-category-btn">+ Nueva Categoría</button>
+                        </div>
+                    </div>
+                    <div class="categories-grid" id="categories-grid">
+                        <!-- Categories loaded dynamically -->
+                    </div>
+
+                    <!-- Category Products Panel (Slide-in) -->
+                    <div id="category-products-panel" class="category-products-panel hidden">
+                        <div class="panel-header">
+                            <h3 id="category-products-title">Productos de Categoría</h3>
+                            <button class="btn btn-sm btn-secondary" id="close-category-products">✖️ Cerrar</button>
+                        </div>
+                        <div class="products-grid" id="category-products-grid">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: Stats -->
             </section>
+
+            <!-- Category Modal -->
+            <div id="category-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 id="category-modal-title">Nueva Categoría</h2>
+                        <button class="modal-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" id="category-id">
+                        <div class="form-group">
+                            <label>Nombre *</label>
+                            <input type="text" id="category-name" class="form-control"
+                                placeholder="Nombre de la categoría">
+                        </div>
+                        <div class="form-group">
+                            <label>Color</label>
+                            <input type="color" id="category-color" class="form-control" value="#FF6B35">
+                        </div>
+                        <div class="form-group">
+                            <label>Icono (emoji)</label>
+                            <input type="text" id="category-icon" class="form-control" placeholder="📦">
+                        </div>
+                        <div class="form-group">
+                            <label>Imagen</label>
+                            <div class="image-upload">
+                                <img id="category-image-preview" class="image-preview" src="" alt="">
+                                <input type="file" id="category-image" accept="image/*" style="display:none;">
+                                <label for="category-image" class="btn btn-secondary btn-sm">📷 Subir imagen</label>
+                                <button class="btn btn-danger btn-sm hidden" id="clear-category-image">✖️
+                                    Quitar</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary modal-cancel">Cancelar</button>
+                        <button class="btn btn-primary" id="save-category">Guardar</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment Modal -->
+            <div id="payment-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Confirmar Pago</h2>
+                        <button class="modal-close modal-cancel">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="payment-summary">
+                            <div class="payment-total">
+                                <span>Total a Pagar</span>
+                                <span id="payment-total-amount">$0</span>
+                            </div>
+                        </div>
+
+                        <div class="payment-methods">
+                            <h3>Método de Pago</h3>
+                            <div class="payment-options">
+                                <button class="payment-option active" data-method="cash">
+                                    <span class="payment-icon">💵</span>
+                                    <span>Efectivo</span>
+                                </button>
+                                <button class="payment-option" data-method="card">
+                                    <span class="payment-icon">💳</span>
+                                    <span>Tarjeta</span>
+                                </button>
+                                <button class="payment-option" data-method="transfer">
+                                    <span class="payment-icon">📲</span>
+                                    <span>Transferencia</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="cash-payment-section" class="cash-payment-section">
+                            <div class="form-group">
+                                <label>Monto Recibido</label>
+                                <input type="number" id="cash-received" class="form-control" placeholder="0"
+                                    style="font-size: 1.5em; text-align: center;">
+                            </div>
+
+                            <div class="quick-amounts">
+                                <button class="quick-amount" data-amount="1000">$1.000</button>
+                                <button class="quick-amount" data-amount="2000">$2.000</button>
+                                <button class="quick-amount" data-amount="5000">$5.000</button>
+                                <button class="quick-amount" data-amount="10000">$10.000</button>
+                                <button class="quick-amount" data-amount="20000">$20.000</button>
+                                <button class="quick-amount" data-amount="exact">Exacto</button>
+                            </div>
+
+                            <div class="change-display">
+                                <span>Vuelto:</span>
+                                <span id="change-amount">$0</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Notas / Comentarios</label>
+                            <textarea id="payment-comments" class="form-control" rows="2"
+                                placeholder="Opcional..."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary modal-cancel">Cancelar</button>
+                        <button class="btn btn-primary" id="confirm-payment">Confirmar Pago</button>
+                    </div>
+                </div>
+            </div>
 
             <!-- Sales History Section (Admin Dashboard) -->
             <section id="sales-history-section" class="section">
                 <div class="section-header">
                     <h1>📊 Flujo del Negocio</h1>
                     <div class="date-filters">
+                        <button class="btn btn-primary" onclick="Sales.openAnnualStats()" style="margin-right: 10px;">📅
+                            Desglose Anual</button>
                         <input type="date" id="sales-date-from" class="date-input">
                         <span>a</span>
                         <input type="date" id="sales-date-to" class="date-input">
@@ -356,6 +543,7 @@
                             <tr>
                                 <th>Hora</th>
                                 <th>Folio</th>
+                                <th>Detalle</th>
                                 <th>Total</th>
                                 <th>Método</th>
                                 <th>Acción</th>
@@ -427,6 +615,31 @@
                     <h1>⚙️ Configuración</h1>
                 </div>
                 <div class="settings-container">
+                    <!-- System Status Card -->
+                    <div class="settings-card" style="border-left: 4px solid #10b981;">
+                        <h3>📡 Estado del Sistema</h3>
+                        <div class="system-status-grid"
+                            style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                            <div class="status-item">
+                                <span class="text-xs text-muted">API Reference</span><br>
+                                <span id="status-firebase-sdk" style="font-weight: bold;">Checking...</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="text-xs text-muted">Conexión Nube</span><br>
+                                <span id="status-connection" style="font-weight: bold;">Checking...</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="text-xs text-muted">Cola Sincronización</span><br>
+                                <span id="status-queue" style="font-weight: bold;">0</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="text-xs text-muted">Versión App</span><br>
+                                <span id="status-version" style="font-weight: bold;">v2.2.2</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-secondary mt-3" id="btn-check-connection" style="width: 100%;">🔄
+                            Verificar Conexión</button>
+                    </div>
                     <div class="settings-card">
                         <h3>🏪 Datos del Negocio</h3>
                         <div class="form-group">
@@ -499,6 +712,14 @@
                                 Dispositivos</button>
                             <button class="btn btn-secondary" id="test-print">🖨️ Imprimir Prueba</button>
                         </div>
+                    </div>
+
+                    <div class="settings-card safety-zone">
+                        <h3>⚠️ Zona de Peligro</h3>
+                        <p class="text-muted mb-2">Elimina todas las ventas y movimientos de inventario. No afecta
+                            productos ni usuarios.</p>
+                        <button class="btn btn-danger" id="btn-reset-data" style="width:100%">🗑️
+                            Borrar Historial de Ventas</button>
                     </div>
 
                     <button class="btn btn-primary" id="save-settings">💾 Guardar Cambios</button>
@@ -862,6 +1083,11 @@
                 <button class="modal-close" data-modal="monthly-stats-modal">&times;</button>
             </div>
             <div class="modal-body">
+                <div class="actions-bar mb-3" style="text-align: right; margin-bottom: 15px;">
+                    <button class="btn btn-secondary btn-sm"
+                        onclick="Sales.openItemsSold(Sales.currentMonthlySales, 'Mes Actual')">📦 Ver Productos
+                        Vendidos</button>
+                </div>
                 <div class="table-container">
                     <table class="data-table">
                         <thead>
@@ -869,9 +1095,40 @@
                                 <th>Fecha</th>
                                 <th>Ventas</th>
                                 <th>Total</th>
+                                <th>Acción</th>
                             </tr>
                         </thead>
                         <tbody id="monthly-stats-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Annual Stats Modal -->
+    <div id="annual-stats-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📅 Desglose Anual</h2>
+                <button class="modal-close" data-modal="annual-stats-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="actions-bar mb-3" style="text-align: right; margin-bottom: 15px;">
+                    <button class="btn btn-secondary btn-sm"
+                        onclick="Sales.openItemsSold(Sales.currentAnnualSales, 'Año Actual')">📦 Ver Productos
+                        Vendidos</button>
+                </div>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Mes</th>
+                                <th>Ventas</th>
+                                <th>Total</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="annual-stats-tbody"></tbody>
                     </table>
                 </div>
             </div>
@@ -921,21 +1178,186 @@
     <!-- Toast Notifications -->
     <div id="toast-container" class="toast-container"></div>
 
-    <!-- Scripts -->
+    <!-- Force clear old service worker caches -->
+    <script>
+        (function () {
+            var APP_VERSION = '8-force-refresh-v2';
+            var lastVersion = localStorage.getItem('pos_app_version');
+            if (lastVersion !== APP_VERSION) {
+                console.log('🔄 Nueva versión detectada, limpiando caché...');
+                localStorage.setItem('pos_app_version', APP_VERSION);
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.getRegistrations().then(function (regs) {
+                        regs.forEach(function (reg) { reg.unregister(); });
+                    });
+                }
+                if ('caches' in window) {
+                    caches.keys().then(function (names) {
+                        names.forEach(function (name) { caches.delete(name); });
+                        if (lastVersion) window.location.reload(true);
+                    });
+                }
+            }
+        })();
+    </script>
+
+    <!-- CORE CONFIG & SERVICES (Load First) -->
+    <script src="js/firebase-config.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/db.js"></script>
-    <script src="js/supabase.js"></script>
-    <script src="js/receipts.js"></script>
-    <script src="js/pos.js"></script>
-    <script src="js/products.js"></script>
-    <script src="js/categories.js"></script>
-    <script src="js/inventory.js"></script>
-    <script src="js/sales.js"></script>
-    <script src="js/customers.js"></script>
     <script src="js/users.js"></script>
+    <script src="js/categories.js"></script>
+    <script src="js/products.js"></script>
+    <script src="js/sales.js"></script>
+    <script src="js/receipts.js"></script>
+
+    <!-- UI MODULES -->
+    <script src="js/inventory.js"></script>
+    <script src="js/customers.js"></script>
     <script src="js/settings.js"></script>
-    <script src="js/sync.js"></script>
-    <script src="js/app.js"></script>
+    <script src="js/sales-ui.js"></script>
+    <script src="js/catalog-ui.js"></script>
+    <script src="js/pos.js"></script>
+    <!-- One-time user PIN setup -->
+    <script>
+        (async function seedUsers() {
+            try {
+                const db = firebase.firestore();
+                const usersRef = db.collection('usuarios');
+
+                const defaults = [
+                    { nombre: 'Administrador', pin: '0000', rol: 'admin' },
+                    { nombre: 'Cajero', pin: '1111', rol: 'vendedor' }
+                ];
+
+                for (const user of defaults) {
+                    // Check if user with this role exists
+                    const snap = await usersRef.where('rol', '==', user.rol).limit(1).get();
+                    if (snap.empty) {
+                        // Create
+                        await usersRef.add({ ...user, activo: true, fechaCreacion: firebase.firestore.FieldValue.serverTimestamp() });
+                        console.log(`✅ Usuario ${user.rol} creado con PIN ${user.pin}`);
+                    } else {
+                        // Update PIN
+                        await snap.docs[0].ref.update({ pin: user.pin });
+                        console.log(`✅ PIN de ${user.rol} actualizado a ${user.pin}`);
+                    }
+                }
+            } catch (e) {
+                console.error('Error seeding users:', e);
+            }
+        })();
+    </script>
+    <script src="js/app-bundle.js?v=1000"></script>
+
+    <!-- SW registration disabled until app is stable -->
+    <!-- Product Modal -->
+    <div id="product-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="product-modal-title">Nuevo Producto</h2>
+                <button class="modal-close modal-cancel">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="product-id">
+                <div class="form-row">
+                    <div class="form-group" style="flex:2">
+                        <label>Nombre *</label>
+                        <input type="text" id="product-name" class="form-control" placeholder="Ej. Hamburguesa Doble">
+                    </div>
+                    <div class="form-group" style="flex:1">
+                        <label>Código de Barras</label>
+                        <input type="text" id="product-barcode" class="form-control" placeholder="Opcional">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Categoría</label>
+                        <select id="product-category" class="form-control">
+                            <option value="">Sin categoría</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Stock</label>
+                        <input type="number" id="product-stock" class="form-control" placeholder="0">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Precio Venta *</label>
+                        <input type="number" id="product-price" class="form-control" placeholder="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Costo (Insumos)</label>
+                        <input type="number" id="product-cost" class="form-control" placeholder="0">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Imagen</label>
+                    <div class="image-upload">
+                        <img id="product-image-preview" class="image-preview" src="" alt="">
+                        <input type="file" id="product-image" accept="image/*" style="display:none;">
+                        <label for="product-image" class="btn btn-secondary btn-sm">📷 Subir imagen</label>
+                        <button class="btn btn-danger btn-sm hidden" id="clear-product-image">✖️ Quitar</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="product-active" checked>
+                        Disfrutar activo para venta
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-cancel">Cancelar</button>
+                <button class="btn btn-primary" id="save-product">Guardar Producto</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Modal -->
+    <div id="user-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="user-modal-title">Nuevo Usuario</h2>
+                <button class="modal-close modal-cancel">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="user-id">
+                <div class="form-group">
+                    <label>Nombre *</label>
+                    <input type="text" id="user-name" class="form-control" placeholder="Nombre completo">
+                </div>
+                <div class="form-group">
+                    <label>Rol</label>
+                    <select id="user-role" class="form-control">
+                        <option value="cashier">Cajero</option>
+                        <option value="admin">Administrador</option>
+                        <option value="kitchen">Cocina</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>PIN de Acceso (4 dígitos) *</label>
+                    <input type="text" id="user-pin" class="form-control" maxlength="4" pattern="\d{4}"
+                        placeholder="0000">
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="user-active" checked>
+                        Usuario activo
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-cancel">Cancelar</button>
+                <button class="btn btn-primary" id="save-user">Guardar Usuario</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Receipt Container (Hidden, for printing) -->
+    <div id="receipt-container" style="display:none;"></div>
+
 </body>
 
 </html>

@@ -1,234 +1,436 @@
-/* =====================================================
-   POS APP - SALES HISTORY MODULE
-   ===================================================== */
+// js/sales.js
+// Gestión de ventas con sincronización Firebase en tiempo real
 
-const Sales = {
-    async init() {
-        this.bindEvents();
-        await this.loadSales();
-    },
+// Use window.FirebaseConfig directly to avoid const redeclaration in global scope
 
-    bindEvents() {
-        document.getElementById('filter-sales')?.addEventListener('click', () => this.loadSales());
-        document.getElementById('reprint-receipt')?.addEventListener('click', () => this.reprintCurrent());
-    },
+class SalesService {
+    constructor() {
+        const { db } = window.FirebaseConfig;
+        this.salesRef = db.collection('ventas');
+        this.unsubscribe = null;
+        this.sales = [];
+        this.listeners = [];
+    }
 
-    async openMonthlyStats() {
-        // Show breakdown by day for current month
-        const sales = await DB.getAll('sales');
-        const now = new Date();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
+    // ========== ESCUCHAR VENTAS EN TIEMPO REAL ==========
+    startListening(callback, filters = {}) {
+        console.log('👂 Iniciando escucha de ventas en tiempo real...');
 
-        const filtered = sales.filter(s => {
-            const d = new Date(s.timestamp);
-            return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-        });
+        let query = this.salesRef.orderBy('fecha', 'desc');
 
-        const byDay = {};
-        filtered.forEach(s => {
-            const date = s.timestamp.split('T')[0];
-            if (!byDay[date]) byDay[date] = { count: 0, total: 0 };
-            byDay[date].count++;
-            byDay[date].total += s.total;
-        });
-
-        const tbody = document.getElementById('monthly-stats-tbody');
-        tbody.innerHTML = Object.entries(byDay).sort().reverse().map(([date, data]) => `
-            <tr>
-                <td>${Utils.formatDate(date)}</td>
-                <td>${data.count}</td>
-                <td>${Utils.formatCurrency(data.total)}</td>
-            </tr>
-        `).join('');
-
-        document.getElementById('monthly-stats-modal').classList.add('active');
-    },
-
-    async openItemsSoldModal() {
-        const sales = await DB.getAll('sales');
-        // Filter by date range if set, or default to all/month? Let's use current view filters or all
-        // For Dashboard context, usually "Items Sold" refers to the period selected.
-        // Let's use the same filter logic as loadSales if possible, but for now simple aggregation
-
-        const items = {};
-        sales.forEach(s => {
-            s.items?.forEach(i => {
-                if (!items[i.product_id]) items[i.product_id] = { name: i.product_name, qty: 0, total: 0 };
-                items[i.product_id].qty += i.quantity;
-                items[i.product_id].total += i.subtotal;
-            });
-        });
-
-        const sorted = Object.values(items).sort((a, b) => b.qty - a.qty);
-
-        const tbody = document.getElementById('items-sold-tbody');
-        tbody.innerHTML = sorted.map(i => `
-            <tr>
-                <td>${Utils.escapeHtml(i.name)}</td>
-                <td>${i.qty}</td>
-                <td>${Utils.formatCurrency(i.total)}</td>
-            </tr>
-        `).join('');
-
-        document.getElementById('items-sold-modal').classList.add('active');
-    },
-
-    async openDailyTransactions() {
-        // Just load daily sales into the daily sales view or show a modal?
-        // User asked "que se vean todas las transacciones del dia".
-        // Let's reuse the logic but perhaps filter for today?
-        // Or redirect to Daily Sales section?
-        // Let's show a modal or reuse logic. Since text said "quiero que se vean..." inside transactions part.
-        // Actually, user said "cree otro historial pero de ventas diarias... solo para los usuarios comunes".
-        // And for Transactions "que se vean todas las transacciones del dia".
-        // I'll make this open the Daily Sales section or similar view.
-        // Simpler: Just filter main view to Today? No, main view table is gone.
-        // Let's open a modal with today's transactions.
-
-        this.loadDailySales('modal'); // Reuse logic
-    },
-
-    async loadDailySales(target = 'section') {
-        const sales = await DB.getAll('sales');
-        const today = new Date().toISOString().split('T')[0];
-
-        const filtered = sales.filter(s => s.timestamp.startsWith(today))
-            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-        let tbody;
-        if (target === 'modal') {
-            // If we wanna show inside a modal (reusing sale-detail logic slightly?)
-            // Actually I didn't create a 'Transactions Modal'. 
-            // Let's use the Daily Sales Section logic but populate the Daily Sales Section and navigate there?
-            // Or filter the main list? But main list is removed.
-            // Let's just navigate to Daily Sales section for now as it fulfills the "Transactions of the day" need.
-            App.navigateTo('daily-sales');
-            return;
-        } else {
-            tbody = document.getElementById('daily-sales-tbody');
+        // Aplicar filtros opcionales
+        if (filters.startDate) {
+            query = query.where('fecha', '>=', filters.startDate);
+        }
+        if (filters.endDate) {
+            query = query.where('fecha', '<=', filters.endDate);
+        }
+        if (filters.vendedor) {
+            query = query.where('vendedor', '==', filters.vendedor);
         }
 
-        if (!tbody) return;
+        this.unsubscribe = query.onSnapshot(
+            (snapshot) => {
+                this.sales = [];
 
-        tbody.innerHTML = filtered.map(s => {
-            const pm = Utils.getPaymentMethodDisplay(s.payment_method);
-            return `
-            <tr>
-                <td>${Utils.formatDateTime(s.timestamp).split(' ')[1]}</td>
-                <td>${s.order_number || s.id.substring(0, 6)}</td>
-                <td><strong>${Utils.formatCurrency(s.total)}</strong></td>
-                <td>${pm.icon}</td>
-                <td><button class="btn btn-sm btn-secondary" onclick="Sales.viewDetail('${s.id}')">👁️</button></td>
-            </tr>
-        `}).join('') || '<tr><td colspan="5" class="text-center text-muted">Sin ventas hoy</td></tr>';
-    },
+                snapshot.forEach((doc) => {
+                    this.sales.push({
+                        id: doc.id,
+                        ...doc.data()
+                    });
+                });
 
-    async loadSales() {
-        const sales = await DB.getAll('sales');
-        const products = await DB.getAll('products');
-        const productMap = Object.fromEntries(products.map(p => [p.id, p]));
+                console.log(`💰 Ventas actualizadas: ${this.sales.length}`);
 
-        let filtered = sales;
-        const dateFrom = document.getElementById('sales-date-from')?.value;
-        const dateTo = document.getElementById('sales-date-to')?.value;
+                // Notificar a todos los listeners
+                this.listeners.forEach(listener => listener(this.sales));
 
-        if (dateFrom) filtered = filtered.filter(s => s.timestamp >= dateFrom);
-        if (dateTo) filtered = filtered.filter(s => s.timestamp <= dateTo + 'T23:59:59');
+                // Callback principal
+                if (callback) callback(this.sales);
 
-        filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                window.FirebaseConfig.showSyncIndicator('✓ Ventas sincronizadas');
+            },
+            (error) => {
+                console.error('❌ Error escuchando ventas:', error);
+                window.FirebaseConfig.handleFirebaseError(error, 'ventas');
+            }
+        );
+    }
 
-        // Calculate revenue
-        const totalValue = filtered.reduce((sum, s) => sum + s.total, 0);
-        const count = filtered.length;
-        const avg = count > 0 ? Math.round(totalValue / count) : 0;
+    // Agregar listener adicional
+    addListener(callback) {
+        this.listeners.push(callback);
+    }
 
-        // Calculate costs from sold items
-        let totalCosts = 0;
-        filtered.forEach(sale => {
-            if (sale.items) {
-                sale.items.forEach(item => {
-                    const product = productMap[item.product_id];
-                    const cost = product?.cost || 0;
-                    totalCosts += cost * item.quantity;
+    // Alias for compatibility
+    subscribe(callback) {
+        this.addListener(callback);
+        // Return unsubscribe function
+        return () => {
+            this.listeners = this.listeners.filter(l => l !== callback);
+        };
+    }
+
+    // ========== ESCUCHAR VENTAS DEL DÍA ==========
+    startListeningToday(callback) {
+        console.log('👂 Iniciando escucha de ventas del día...');
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        this.unsubscribe = this.salesRef
+            .where('fecha', '>=', today)
+            .orderBy('fecha', 'desc')
+            .onSnapshot(
+                (snapshot) => {
+                    const todaySales = [];
+                    let totalVentas = 0;
+                    let totalCostos = 0;
+
+                    snapshot.forEach((doc) => {
+                        const sale = { id: doc.id, ...doc.data() };
+                        todaySales.push(sale);
+                        totalVentas += sale.total || 0;
+                        totalCostos += sale.costoTotal || 0;
+                    });
+
+                    const ganancia = totalVentas - totalCostos;
+
+                    console.log(`💰 Ventas del día: ${todaySales.length} | Total: $${totalVentas.toFixed(2)}`);
+
+                    // Callback con resumen
+                    if (callback) {
+                        callback({
+                            ventas: todaySales,
+                            cantidadVentas: todaySales.length,
+                            totalVentas,
+                            totalCostos,
+                            ganancia
+                        });
+                    }
+
+                    window.FirebaseConfig.showSyncIndicator('✓ Ventas del día actualizadas');
+                },
+                (error) => {
+                    console.error('❌ Error escuchando ventas del día:', error);
+                    window.FirebaseConfig.handleFirebaseError(error, 'ventas del día');
+                }
+            );
+    }
+
+    // Detener escucha
+    stopListening() {
+        if (this.unsubscribe) {
+            this.unsubscribe();
+            console.log('🔇 Escucha de ventas detenida');
+        }
+    }
+
+    // Agregar listener adicional
+    addListener(callback) {
+        this.listeners.push(callback);
+    }
+
+    // Alias for compatibility
+    subscribe(callback) {
+        this.addListener(callback);
+        // Llamar inmediatamente con datos actuales si existen
+        if (this.sales.length > 0) {
+            callback(this.sales);
+        }
+    }
+
+    // ========== REGISTRAR VENTA ==========
+    async createSale(saleData) {
+        try {
+            window.FirebaseConfig.showSyncIndicator('Registrando venta...');
+
+            // Calcular totales
+            let subtotal = 0;
+            let costoTotal = 0;
+
+            saleData.items.forEach(item => {
+                subtotal += item.precio * item.cantidad;
+                costoTotal += (item.costo || 0) * item.cantidad;
+            });
+
+            const descuento = parseFloat(saleData.descuento) || 0;
+            const total = subtotal - descuento;
+            const ganancia = total - costoTotal;
+
+            // Preparar datos de la venta
+            const sale = {
+                items: saleData.items.map(item => ({
+                    productId: item.id || item.productId,
+                    nombre: item.nombre,
+                    precio: parseFloat(item.precio),
+                    costo: parseFloat(item.costo || 0),
+                    cantidad: parseInt(item.cantidad),
+                    subtotal: parseFloat(item.precio) * parseInt(item.cantidad)
+                })),
+                subtotal,
+                descuento,
+                total,
+                costoTotal,
+                ganancia,
+                metodoPago: saleData.metodoPago || 'efectivo',
+                vendedor: saleData.vendedor || 'Sistema',
+                vendedorId: saleData.vendedorId || 'system',
+                cliente: saleData.cliente || 'Público',
+                notas: saleData.notas || '',
+                fecha: window.FirebaseConfig.serverTimestamp(),
+                estado: 'completada',
+                turno: saleData.turno || 'Día'
+            };
+
+            // Ejecutar en transacción para actualizar stock
+            const result = await window.FirebaseConfig.db.runTransaction(async (transaction) => {
+                // 1. Verificar y reservar stock
+                const stockUpdates = [];
+
+                for (const item of sale.items) {
+                    const productRef = window.FirebaseConfig.db.collection('productos').doc(item.productId);
+                    const productDoc = await transaction.get(productRef);
+
+                    if (!productDoc.exists) {
+                        throw new Error(`Producto ${item.nombre} no encontrado`);
+                    }
+
+                    const currentStock = productDoc.data().stock || 0;
+
+                    if (currentStock < item.cantidad) {
+                        throw new Error(
+                            `Stock insuficiente para ${item.nombre}. ` +
+                            `Disponible: ${currentStock}, Requerido: ${item.cantidad}`
+                        );
+                    }
+
+                    stockUpdates.push({
+                        ref: productRef,
+                        newStock: currentStock - item.cantidad
+                    });
+                }
+
+                // 2. Crear venta
+                const saleRef = window.FirebaseConfig.db.collection('ventas').doc();
+                transaction.set(saleRef, sale);
+
+                // 3. Actualizar stocks
+                stockUpdates.forEach(update => {
+                    transaction.update(update.ref, {
+                        stock: update.newStock,
+                        ultimaModificacion: window.FirebaseConfig.serverTimestamp()
+                    });
+                });
+
+                return saleRef.id;
+            });
+
+            console.log('✅ Venta registrada:', result);
+            window.FirebaseConfig.showSyncIndicator('✓ Venta registrada');
+
+            // Imprimir recibo si está configurado
+            if (window.receiptsService && saleData.imprimirRecibo !== false) {
+                window.receiptsService.printReceipt({
+                    id: result,
+                    ...sale
                 });
             }
-        });
 
-        // Calculate profit
-        const profit = totalValue - totalCosts;
-        const margin = totalValue > 0 ? Math.round((profit / totalValue) * 100) : 0;
+            return { success: true, id: result, sale };
 
-        // Update stats
-        document.getElementById('total-sales-value').textContent = Utils.formatCurrency(totalValue);
-        document.getElementById('total-transactions').textContent = count;
-        document.getElementById('average-sale').textContent = Utils.formatCurrency(avg);
-
-        // Update profit stats
-        const costsEl = document.getElementById('total-costs');
-        const profitEl = document.getElementById('total-profit');
-        const marginEl = document.getElementById('profit-margin');
-
-        if (costsEl) costsEl.textContent = Utils.formatCurrency(totalCosts);
-        if (profitEl) {
-            profitEl.textContent = Utils.formatCurrency(profit);
-            profitEl.style.color = profit >= 0 ? '#27ae60' : '#e74c3c';
+        } catch (error) {
+            return window.FirebaseConfig.handleFirebaseError(error, 'registrar venta');
         }
-        if (marginEl) marginEl.textContent = margin + '%';
-    },
-
-    currentSale: null,
-
-    async viewDetail(id) {
-        const sale = await DB.get('sales', id);
-        if (!sale) return;
-        this.currentSale = sale;
-
-        const users = await DB.getAll('users');
-        const cashier = users.find(u => u.id === sale.cashier_id);
-        const pm = Utils.getPaymentMethodDisplay(sale.payment_method);
-
-        const content = document.getElementById('sale-detail-content');
-        content.innerHTML = `
-            <div class="sale-detail">
-                <div class="sale-detail-header">
-                    <h3>Orden #${sale.order_number || sale.id.substring(0, 8)}</h3>
-                    <p>${Utils.formatDateTime(sale.timestamp)}</p>
-                </div>
-                <div class="sale-detail-info">
-                    <p><strong>Cajero:</strong> ${Utils.escapeHtml(cashier?.name || 'N/A')}</p>
-                    <p><strong>Método:</strong> ${pm.icon} ${pm.label}</p>
-                    ${sale.proof_image ? `
-                    <div class="payment-proof mt-2">
-                        <strong>📸 Comprobante:</strong><br>
-                        <img src="${sale.proof_image}" alt="Comprobante" style="max-width: 100%; max-height: 200px; border: 1px solid #ddd; border-radius: 4px; margin-top: 5px;">
-                    </div>` : ''}
-                </div>
-                <table class="data-table mt-2">
-                    <thead><tr><th>Producto</th><th>Cant.</th><th>Precio</th><th>Subtotal</th></tr></thead>
-                    <tbody>
-                        ${sale.items.map(i => `
-                            <tr>
-                                <td>${Utils.escapeHtml(i.product_name)}</td>
-                                <td>${i.quantity}</td>
-                                <td>${Utils.formatCurrency(i.unit_price)}</td>
-                                <td>${Utils.formatCurrency(i.subtotal)}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-                <div class="sale-detail-totals mt-2">
-                    <p>Neto: ${Utils.formatCurrency(sale.subtotal)}</p>
-                    <p>IVA: ${Utils.formatCurrency(sale.tax)}</p>
-                    <p><strong>Total: ${Utils.formatCurrency(sale.total)}</strong></p>
-                </div>
-            </div>
-        `;
-        document.getElementById('sale-detail-modal').classList.add('active');
-    },
-
-    async reprintCurrent() {
-        if (!this.currentSale) return;
-        await Receipts.reprintClientReceipt(this.currentSale);
     }
-};
+
+    // ========== ANULAR VENTA ==========
+    async cancelSale(saleId, motivo = '') {
+        try {
+            window.FirebaseConfig.showSyncIndicator('Anulando venta...');
+
+            await window.FirebaseConfig.db.runTransaction(async (transaction) => {
+                // 1. Obtener venta
+                const saleRef = this.salesRef.doc(saleId);
+                const saleDoc = await transaction.get(saleRef);
+
+                if (!saleDoc.exists) {
+                    throw new Error('Venta no encontrada');
+                }
+
+                const saleData = saleDoc.data();
+
+                if (saleData.estado === 'anulada') {
+                    throw new Error('La venta ya está anulada');
+                }
+
+                // 2. Devolver stock
+                for (const item of saleData.items) {
+                    const productRef = window.FirebaseConfig.db.collection('productos').doc(item.productId);
+                    const productDoc = await transaction.get(productRef);
+
+                    if (productDoc.exists) {
+                        const currentStock = productDoc.data().stock || 0;
+                        transaction.update(productRef, {
+                            stock: currentStock + item.cantidad,
+                            ultimaModificacion: window.FirebaseConfig.serverTimestamp()
+                        });
+                    }
+                }
+
+                // 3. Marcar venta como anulada
+                transaction.update(saleRef, {
+                    estado: 'anulada',
+                    fechaAnulacion: window.FirebaseConfig.serverTimestamp(),
+                    motivoAnulacion: motivo
+                });
+            });
+
+            console.log('✅ Venta anulada:', saleId);
+            window.FirebaseConfig.showSyncIndicator('✓ Venta anulada');
+
+            return { success: true };
+
+        } catch (error) {
+            return window.FirebaseConfig.handleFirebaseError(error, 'anular venta');
+        }
+    }
+
+    // ========== OBTENER VENTA POR ID ==========
+    async getSale(saleId) {
+        try {
+            const doc = await this.salesRef.doc(saleId).get();
+
+            if (!doc.exists) {
+                return { success: false, error: 'Venta no encontrada' };
+            }
+
+            return {
+                success: true,
+                sale: { id: doc.id, ...doc.data() }
+            };
+
+        } catch (error) {
+            return window.FirebaseConfig.handleFirebaseError(error, 'obtener venta');
+        }
+    }
+
+    // ========== OBTENER VENTAS POR RANGO DE FECHAS ==========
+    async getSalesByDateRange(startDate, endDate) {
+        try {
+            const snapshot = await this.salesRef
+                .where('fecha', '>=', startDate)
+                .where('fecha', '<=', endDate)
+                .orderBy('fecha', 'desc')
+                .get();
+
+            const sales = [];
+            snapshot.forEach(doc => {
+                sales.push({ id: doc.id, ...doc.data() });
+            });
+
+            return { success: true, sales };
+
+        } catch (error) {
+            return window.FirebaseConfig.handleFirebaseError(error, 'obtener ventas por fecha');
+        }
+    }
+
+    // ========== OBTENER RESUMEN DE VENTAS ==========
+    async getSalesSummary(startDate, endDate) {
+        try {
+            const result = await this.getSalesByDateRange(startDate, endDate);
+
+            if (!result.success) return result;
+
+            const sales = result.sales.filter(s => s.estado !== 'anulada');
+
+            let totalVentas = 0;
+            let totalCostos = 0;
+            let cantidadVentas = sales.length;
+            let ventasPorMetodo = {};
+            let ventasPorVendedor = {};
+
+            sales.forEach(sale => {
+                totalVentas += sale.total || 0;
+                totalCostos += sale.costoTotal || 0;
+
+                // Por método de pago
+                const metodo = sale.metodoPago || 'efectivo';
+                ventasPorMetodo[metodo] = (ventasPorMetodo[metodo] || 0) + sale.total;
+
+                // Por vendedor
+                const vendedor = sale.vendedor || 'Sistema';
+                if (!ventasPorVendedor[vendedor]) {
+                    ventasPorVendedor[vendedor] = {
+                        cantidad: 0,
+                        total: 0
+                    };
+                }
+                ventasPorVendedor[vendedor].cantidad++;
+                ventasPorVendedor[vendedor].total += sale.total;
+            });
+
+            const ganancia = totalVentas - totalCostos;
+            const ticketPromedio = cantidadVentas > 0 ? totalVentas / cantidadVentas : 0;
+
+            return {
+                success: true,
+                summary: {
+                    cantidadVentas,
+                    totalVentas,
+                    totalCostos,
+                    ganancia,
+                    ticketPromedio,
+                    ventasPorMetodo,
+                    ventasPorVendedor
+                }
+            };
+
+        } catch (error) {
+            return window.FirebaseConfig.handleFirebaseError(error, 'obtener resumen de ventas');
+        }
+    }
+
+    // ========== OBTENER TOP PRODUCTOS VENDIDOS ==========
+    async getTopProducts(startDate, endDate, limit = 10) {
+        try {
+            const result = await this.getSalesByDateRange(startDate, endDate);
+
+            if (!result.success) return result;
+
+            const sales = result.sales.filter(s => s.estado !== 'anulada');
+            const productSales = {};
+
+            sales.forEach(sale => {
+                sale.items.forEach(item => {
+                    if (!productSales[item.productId]) {
+                        productSales[item.productId] = {
+                            nombre: item.nombre,
+                            cantidad: 0,
+                            total: 0
+                        };
+                    }
+                    productSales[item.productId].cantidad += item.cantidad;
+                    productSales[item.productId].total += item.subtotal;
+                });
+            });
+
+            // Convertir a array y ordenar
+            const topProducts = Object.entries(productSales)
+                .map(([id, data]) => ({ id, ...data }))
+                .sort((a, b) => b.cantidad - a.cantidad)
+                .slice(0, limit);
+
+            return { success: true, topProducts };
+
+        } catch (error) {
+            return window.FirebaseConfig.handleFirebaseError(error, 'obtener top productos');
+        }
+    }
+}
+
+// Crear instancia global
+window.salesService = new SalesService();
+
+console.log('✅ SalesService inicializado');

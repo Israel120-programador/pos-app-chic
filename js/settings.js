@@ -11,14 +11,11 @@ const Settings = {
         await this.loadSettings();
     },
 
-    bindEvents() {
-        document.getElementById('save-settings')?.addEventListener('click', () => this.save());
-        document.getElementById('scan-bluetooth')?.addEventListener('click', () => this.scanBluetooth());
-        document.getElementById('test-print')?.addEventListener('click', () => this.testPrint());
-    },
-
     async loadSettings() {
         let settings = await DB.get('settings', 'default');
+
+        // Check Status
+        this.checkSystemStatus();
 
         if (!settings) {
             settings = {
@@ -46,6 +43,101 @@ const Settings = {
         document.getElementById('setting-device-id').value = settings.device_id;
         document.getElementById('setting-print-receipts').checked = settings.print_receipts !== false;
         document.getElementById('setting-offline-mode').checked = settings.offline_mode || false;
+    },
+
+    async checkSystemStatus() {
+        // 1. Check Firebase SDK
+        const fbStatus = document.getElementById('status-firebase-sdk');
+        if (fbStatus) {
+            if (typeof firebase !== 'undefined') {
+                fbStatus.textContent = '✅ Cargado';
+                fbStatus.className = 'status-value text-success';
+            } else {
+                fbStatus.textContent = '❌ No Cargado';
+                fbStatus.className = 'status-value text-danger';
+            }
+        }
+
+        // 2. Check Firebase Connection
+        const connStatus = document.getElementById('status-connection');
+        if (connStatus) {
+            connStatus.textContent = '⏳ Probando...';
+            try {
+                const db = window.FirebaseConfig && window.FirebaseConfig.db;
+                if (db) {
+                    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000));
+                    const check = db.collection('configuracion').doc('health_check').get();
+                    await Promise.race([check, timeout]);
+                    connStatus.textContent = '✅ Online (Firestore)';
+                    connStatus.className = 'status-value text-success';
+                } else {
+                    connStatus.textContent = '❌ Sin DB';
+                    connStatus.className = 'status-value text-danger';
+                }
+            } catch (e) {
+                console.warn('Connection check failed:', e);
+                if (navigator.onLine) {
+                    connStatus.textContent = '⚠️ Error (Bloqueado?)';
+                    connStatus.className = 'status-value text-warning';
+                } else {
+                    connStatus.textContent = '❌ Offline';
+                    connStatus.className = 'status-value text-danger';
+                }
+            }
+        }
+
+        // 3. Queue
+        const qStatus = document.getElementById('status-queue');
+        if (qStatus) {
+            qStatus.textContent = typeof Sync !== 'undefined' ? Sync.retryQueue.length : '0';
+        }
+
+        // 4. SW
+        const swStatus = document.getElementById('status-version');
+        if (swStatus) swStatus.textContent = 'v3.0.0 (Firebase)';
+    },
+
+    bindEvents() {
+        document.getElementById('save-settings')?.addEventListener('click', () => this.save());
+        document.getElementById('scan-bluetooth')?.addEventListener('click', () => this.scanBluetooth());
+        document.getElementById('test-print')?.addEventListener('click', () => this.testPrint());
+        document.getElementById('btn-check-connection')?.addEventListener('click', () => this.checkSystemStatus());
+
+        // Delete sales history
+        document.getElementById('btn-reset-data')?.addEventListener('click', () => this.resetSalesData());
+    },
+
+    async resetSalesData() {
+        if (!confirm('⚠️ ¿Seguro que deseas borrar TODO el historial de ventas? Esta acción NO se puede deshacer.')) return;
+        if (!confirm('🚨 ÚLTIMA CONFIRMACIÓN: Se eliminarán TODAS las ventas registradas. ¿Continuar?')) return;
+
+        try {
+            Utils.showToast('Eliminando historial de ventas...', 'info');
+
+            // Delete all documents in 'ventas' collection
+            const snapshot = await window.FirebaseConfig.db.collection('ventas').get();
+            const batch = window.FirebaseConfig.db.batch();
+            let count = 0;
+
+            snapshot.docs.forEach(doc => {
+                batch.delete(doc.ref);
+                count++;
+            });
+
+            if (count > 0) {
+                await batch.commit();
+            }
+
+            Utils.showToast(`✅ ${count} ventas eliminadas`, 'success');
+
+            // Refresh sales UI
+            if (typeof Sales !== 'undefined' && Sales.loadSalesHistory) {
+                Sales.loadSalesHistory();
+            }
+        } catch (error) {
+            console.error('Error deleting sales:', error);
+            Utils.showToast('Error al eliminar ventas: ' + error.message, 'error');
+        }
     },
 
     async save() {

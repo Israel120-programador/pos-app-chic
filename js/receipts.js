@@ -10,8 +10,26 @@ const Receipts = {
         this.settings = await DB.get('settings', 'default') || {};
     },
 
+    // Normalize sale data — handle both Spanish and English field names
+    _normalizeSale(sale) {
+        const timestamp = sale.timestamp || (sale.fecha?.toDate ? sale.fecha.toDate() : sale.fecha) || new Date();
+        return {
+            ...sale,
+            timestamp,
+            items: (sale.items || []).map(item => ({
+                ...item,
+                product_name: item.product_name || item.nombre || 'Producto',
+                quantity: item.quantity || item.cantidad || 0,
+                unit_price: item.unit_price || item.precioUnitario || item.precio || 0,
+                subtotal: item.subtotal || ((item.precio || 0) * (item.cantidad || 0)),
+                modifiers: item.modifiers || []
+            }))
+        };
+    },
+
     // Generate SII-compliant client receipt
-    generateClientReceipt(sale) {
+    generateClientReceipt(rawSale) {
+        const sale = this._normalizeSale(rawSale);
         const s = this.settings;
         return `
         <div class="receipt receipt-client">
@@ -50,6 +68,7 @@ const Receipts = {
                 </div>
                 <div class="total-row">
                     <span>IVA (19%)</span>
+
                     <span>${Utils.formatCurrency(sale.tax)}</span>
                 </div>
                 <div class="total-row grand-total">
@@ -66,7 +85,8 @@ const Receipts = {
     },
 
     // Generate detailed local/kitchen receipt (without costs)
-    generateLocalReceipt(sale, cashierName) {
+    generateLocalReceipt(rawSale, cashierName) {
+        const sale = this._normalizeSale(rawSale);
         return `
         <div class="receipt receipt-local">
             <div class="receipt-header">
@@ -121,16 +141,32 @@ const Receipts = {
     },
 
     // Print both receipts
+    // Alias for printReceipt (called from SalesService)
+    printReceipt(sale) {
+        const cashier = sale.vendedor || window.usersService?.getCurrentUser()?.nombre || 'N/A';
+        this.printDualReceipt(sale, cashier);
+    },
+
     async printDualReceipt(sale, cashierName) {
         await this.init();
 
         const container = document.getElementById('receipt-container');
+
+        const separator = `
+            <div style="margin: 15px 0; border-bottom: 2px dashed #000; text-align: center; font-size: 10px; padding: 10px 0;">
+                ✂️ --- CÓRTAR AQUÍ --- ✂️<br>
+                COPIA COCINA 👇
+            </div>
+            <br>
+        `;
+
         container.innerHTML =
             this.generateClientReceipt(sale) +
+            separator +
             this.generateLocalReceipt(sale, cashierName);
 
         // Trigger print
-        setTimeout(() => window.print(), 100);
+        setTimeout(() => window.print(), 200);
     },
 
     // Reprint single receipt
@@ -141,3 +177,7 @@ const Receipts = {
         setTimeout(() => window.print(), 100);
     }
 };
+
+// Expose globally so SalesService can find it
+window.receiptsService = Receipts;
+console.log('✅ Receipts module loaded');
