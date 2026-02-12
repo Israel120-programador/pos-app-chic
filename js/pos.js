@@ -524,6 +524,7 @@ class POSScreen {
             }
         }
     }
+}
 
 // Crear instancia global
 window.posScreen = new POSScreen();
