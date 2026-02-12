@@ -582,6 +582,20 @@ body {
     border-color: var(--accent-primary);
 }
 
+/* Fix for cut-off titles */
+.product-card h3 {
+    margin: 8px 0;
+    font-size: var(--font-size-md);
+    font-weight: 600;
+    line-height: 1.3;
+    white-space: normal;
+    /* Allow wrap */
+    overflow: visible;
+    text-overflow: clip;
+    /* No ellipsis */
+    height: auto;
+}
+
 .product-card:active {
     transform: scale(0.98);
 }
@@ -3415,13 +3429,14 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 15px 25px;
-    background: #1e293b;
-    /* Slate 800 Row */
+    background: rgba(30, 58, 138, 0.3);
+    /* Blue tint to match Back button */
     border-radius: 8px;
     margin-bottom: 8px;
     cursor: pointer;
     transition: all 0.2s;
-    border: 1px solid #334155;
+    border: 1px solid #3b82f6;
+    /* Blue border */
 }
 
 .product-list-item:hover {
