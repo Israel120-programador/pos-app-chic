@@ -233,7 +233,8 @@ class SalesService {
             if (window.receiptsService && saleData.imprimirRecibo !== false) {
                 window.receiptsService.printReceipt({
                     id: result,
-                    ...sale
+                    ...sale,
+                    fecha: new Date() // Override serverTimestamp with actual date for printing
                 });
             }
 
