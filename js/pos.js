@@ -215,7 +215,7 @@ class POSScreen {
         if (products.length === 0) {
             container.innerHTML = `
                 <div class="category-view-container">
-                    <div class="category-back-column" onclick="window.posScreen.goBack()">
+                    <div class="category-back-column" id="category-back-btn-empty">
                         <div class="back-icon">⬅️</div>
                         <div class="back-text">Atrás</div>
                     </div>
@@ -223,13 +223,17 @@ class POSScreen {
                         <h3>No hay productos en esta categoría</h3>
                     </div>
                 </div>`;
+            setTimeout(() => {
+                const btn = document.getElementById('category-back-btn-empty');
+                if (btn) btn.addEventListener('click', () => this.goBack());
+            }, 0);
             return;
         }
 
         container.innerHTML = `
             <div class="category-view-container">
                 <!-- Left: Back Button -->
-                <div class="category-back-column" onclick="window.posScreen.goBack()">
+                <div class="category-back-column" id="category-back-btn">
                     <div class="back-icon">⬅️</div>
                     <div class="back-text">Atrás</div>
                 </div>
@@ -262,6 +266,12 @@ class POSScreen {
                 </div>
             </div>
         `;
+
+        // Safer event listener binding
+        setTimeout(() => {
+            const backBtn = document.getElementById('category-back-btn');
+            if (backBtn) backBtn.addEventListener('click', () => this.goBack());
+        }, 0);
     }
 
     renderProductCards(container, products) {
