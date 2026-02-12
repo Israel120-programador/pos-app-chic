@@ -11,6 +11,10 @@ class POSScreen {
     // ========== INICIALIZACIÓN ==========
     init() {
         console.log('🚀 Iniciando POS Screen...');
+        window.scrollTo(0, 0); // Force top scroll
+        if ('scrollRestoration' in history) {
+            history.scrollRestoration = 'manual';
+        }
         this.bindEvents();
 
         // Render inicial (esperar a que lleguen datos de servicios)
