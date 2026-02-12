@@ -304,11 +304,15 @@ body {
 /* =====================================================
    APP CONTAINER
    ===================================================== */
+/* =====================================================
+   APP CONTAINER
+   ===================================================== */
 .app-container {
     display: flex;
     min-height: 100vh;
-    overflow-x: hidden;
-    overflow-y: auto;
+    width: 100%;
+    /* Remove complex overflows, let body scroll */
+    position: relative;
 }
 
 .app-container.hidden {
@@ -428,22 +432,25 @@ body {
 /* =====================================================
    MAIN CONTENT
    ===================================================== */
+/* =====================================================
+   MAIN CONTENT
+   ===================================================== */
 .main-content {
     flex: 1;
-    overflow-x: hidden;
-    overflow-y: auto;
     display: flex;
     flex-direction: column;
+    min-width: 0;
+    /* Fix flex child overflow */
 }
 
 .section {
     display: none;
     flex: 1;
-    overflow-x: hidden;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
     padding: var(--spacing-lg);
     flex-direction: column;
+    /* Remove internal scroll, use window scroll */
+    height: auto;
+    overflow: visible;
 }
 
 .section.active {
