@@ -313,13 +313,15 @@ class POSScreen {
             currentInCart.cantidad++;
             currentInCart.subtotal = currentInCart.cantidad * currentInCart.precio;
         } else {
+            const price = parseFloat(product.precio) || 0;
+            const cost = parseFloat(product.costo) || 0;
             this.cart.push({
                 productId: product.id,
                 nombre: product.nombre,
-                precio: product.precio,
-                costo: product.costo || 0,
+                precio: price,
+                costo: cost,
                 cantidad: 1,
-                subtotal: product.precio
+                subtotal: price
             });
         }
 

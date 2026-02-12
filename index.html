@@ -442,290 +442,304 @@
                     </div>
                 </div>
             </div>
+    </div>
 
-            <!-- Sales History Section (Admin Dashboard) -->
-            <section id="sales-history-section" class="section">
-                <div class="section-header">
-                    <h1>📊 Flujo del Negocio</h1>
-                    <div class="date-filters">
-                        <button class="btn btn-primary" onclick="Sales.openAnnualStats()" style="margin-right: 10px;">📅
-                            Desglose Anual</button>
-                        <input type="date" id="sales-date-from" class="date-input">
-                        <span>a</span>
-                        <input type="date" id="sales-date-to" class="date-input">
-                        <button class="btn btn-secondary" id="filter-sales">Filtrar</button>
+    <!-- Modal Detalle de Venta -->
+    <div id="sale-detail-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📋 Detalle de Venta</h2>
+                <button class="modal-close"
+                    onclick="document.getElementById('sale-detail-modal').classList.remove('active')">&times;</button>
+            </div>
+            <div class="modal-body" id="sale-detail-body">
+                <!-- Content injected by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Sales History Section (Admin Dashboard) -->
+    <section id="sales-history-section" class="section">
+        <div class="section-header">
+            <h1>📊 Flujo del Negocio</h1>
+            <div class="date-filters">
+                <button class="btn btn-primary" onclick="Sales.openAnnualStats()" style="margin-right: 10px;">📅
+                    Desglose Anual</button>
+                <input type="date" id="sales-date-from" class="date-input">
+                <span>a</span>
+                <input type="date" id="sales-date-to" class="date-input">
+                <button class="btn btn-secondary" id="filter-sales">Filtrar</button>
+            </div>
+        </div>
+
+        <!-- Interactive Stats Dashboard -->
+        <div class="sales-stats" id="sales-stats">
+            <div class="stat-card clickable" onclick="Sales.openMonthlyStats()">
+                <span class="stat-icon">💰</span>
+                <div class="stat-info">
+                    <span class="stat-value" id="total-sales-value">$0</span>
+                    <span class="stat-label">Ventas Totales (Ver Mes)</span>
+                </div>
+            </div>
+            <div class="stat-card clickable" onclick="Sales.openDailyTransactions()">
+                <span class="stat-icon">🧾</span>
+                <div class="stat-info">
+                    <span class="stat-value" id="total-transactions">0</span>
+                    <span class="stat-label">Transacciones (Ver Día)</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <span class="stat-icon">📈</span>
+                <div class="stat-info">
+                    <span class="stat-value" id="average-sale">$0</span>
+                    <span class="stat-label">Promedio por Venta</span>
+                </div>
+            </div>
+            <div class="stat-card" style="border-left: 4px solid #e74c3c;">
+                <span class="stat-icon">📦</span>
+                <div class="stat-info">
+                    <span class="stat-value" id="total-costs" style="color:#e74c3c;">$0</span>
+                    <span class="stat-label">Costo Total</span>
+                </div>
+            </div>
+            <div class="stat-card" style="border-left: 4px solid #27ae60;">
+                <span class="stat-icon">📊</span>
+                <div class="stat-info">
+                    <span class="stat-value" id="total-profit" style="color:#27ae60;">$0</span>
+                    <span class="stat-label">Ganancia Neta</span>
+                </div>
+            </div>
+            <div class="stat-card" style="border-left: 4px solid #3498db;">
+                <span class="stat-icon">📉</span>
+                <div class="stat-info">
+                    <span class="stat-value" id="profit-margin">0%</span>
+                    <span class="stat-label">Margen</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="inventory-stats" id="inventory-stats" style="margin-bottom: 20px;">
+            <div class="stat-card clickable" onclick="Inventory.openLowStockModal()">
+                <span class="stat-icon">⚠️</span>
+                <div class="stat-info">
+                    <span class="stat-value" id="low-stock-count">0</span>
+                    <span class="stat-label">Stock Bajo (Ver Lista)</span>
+                </div>
+            </div>
+            <div class="stat-card clickable" onclick="Sales.openItemsSoldModal()">
+                <span class="stat-icon">🛒</span>
+                <div class="stat-info">
+                    <span class="stat-value" id="total-items-sold">0</span>
+                    <span class="stat-label">Items Vendidos (Ver Lista)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts (Kept as visual aid) -->
+        <div class="inventory-grid" style="margin-bottom: 20px;">
+            <div class="inventory-card chart-card" style="width:100%">
+                <h3>🏆 Top Productos</h3>
+                <canvas id="top-products-chart" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <!-- Daily Sales Section (Common User) -->
+    <section id="daily-sales-section" class="section">
+        <div class="section-header">
+            <h1>📅 Ventas del Día</h1>
+            <div class="header-actions">
+                <button class="btn btn-secondary" onclick="Sales.loadDailySales()">↻ Actualizar</button>
+            </div>
+        </div>
+        <div class="table-container">
+            <table class="data-table" id="daily-sales-table">
+                <thead>
+                    <tr>
+                        <th>Hora</th>
+                        <th>Folio</th>
+                        <th>Detalle</th>
+                        <th>Total</th>
+                        <th>Método</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody id="daily-sales-tbody">
+                    <!-- Daily sales loaded here -->
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Customers Section -->
+    <section id="customers-section" class="section">
+        <div class="section-header">
+            <h1>👥 Clientes</h1>
+            <button class="btn btn-primary" id="add-customer-btn">+ Nuevo Cliente</button>
+        </div>
+        <div class="filters-bar">
+            <input type="text" id="customers-search" placeholder="Buscar cliente..." class="search-input">
+        </div>
+        <div class="table-container">
+            <table class="data-table" id="customers-table">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Teléfono</th>
+                        <th>Email</th>
+                        <th>Puntos</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="customers-tbody">
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Users Section -->
+    <section id="users-section" class="section">
+        <div class="section-header">
+            <h1>👤 Usuarios</h1>
+            <div class="header-actions">
+                <span class="unsaved-indicator hidden" id="users-unsaved-indicator">⚠️ Cambios sin
+                    guardar</span>
+                <button class="btn btn-success hidden" id="save-users-btn">💾 Guardar Cambios</button>
+                <button class="btn btn-primary" id="add-user-btn">+ Nuevo Usuario</button>
+            </div>
+        </div>
+        <div class="table-container">
+            <table class="data-table" id="users-table">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Rol</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="users-tbody">
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Settings Section -->
+    <section id="settings-section" class="section">
+        <div class="section-header">
+            <h1>⚙️ Configuración</h1>
+        </div>
+        <div class="settings-container">
+            <!-- System Status Card -->
+            <div class="settings-card" style="border-left: 4px solid #10b981;">
+                <h3>📡 Estado del Sistema</h3>
+                <div class="system-status-grid"
+                    style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                    <div class="status-item">
+                        <span class="text-xs text-muted">API Reference</span><br>
+                        <span id="status-firebase-sdk" style="font-weight: bold;">Checking...</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="text-xs text-muted">Conexión Nube</span><br>
+                        <span id="status-connection" style="font-weight: bold;">Checking...</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="text-xs text-muted">Cola Sincronización</span><br>
+                        <span id="status-queue" style="font-weight: bold;">0</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="text-xs text-muted">Versión App</span><br>
+                        <span id="status-version" style="font-weight: bold;">v2.2.2</span>
                     </div>
                 </div>
+                <button class="btn btn-secondary mt-3" id="btn-check-connection" style="width: 100%;">🔄
+                    Verificar Conexión</button>
+            </div>
+            <div class="settings-card">
+                <h3>🏪 Datos del Negocio</h3>
+                <div class="form-group">
+                    <label>Nombre del Negocio</label>
+                    <input type="text" id="setting-business-name" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>RUT</label>
+                    <input type="text" id="setting-rut" class="form-input" placeholder="12.345.678-9">
+                </div>
+                <div class="form-group">
+                    <label>Dirección</label>
+                    <input type="text" id="setting-address" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>Giro</label>
+                    <input type="text" id="setting-giro" class="form-input" placeholder="Venta de alimentos">
+                </div>
+            </div>
 
-                <!-- Interactive Stats Dashboard -->
-                <div class="sales-stats" id="sales-stats">
-                    <div class="stat-card clickable" onclick="Sales.openMonthlyStats()">
-                        <span class="stat-icon">💰</span>
-                        <div class="stat-info">
-                            <span class="stat-value" id="total-sales-value">$0</span>
-                            <span class="stat-label">Ventas Totales (Ver Mes)</span>
-                        </div>
-                    </div>
-                    <div class="stat-card clickable" onclick="Sales.openDailyTransactions()">
-                        <span class="stat-icon">🧾</span>
-                        <div class="stat-info">
-                            <span class="stat-value" id="total-transactions">0</span>
-                            <span class="stat-label">Transacciones (Ver Día)</span>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-icon">📈</span>
-                        <div class="stat-info">
-                            <span class="stat-value" id="average-sale">$0</span>
-                            <span class="stat-label">Promedio por Venta</span>
-                        </div>
-                    </div>
-                    <div class="stat-card" style="border-left: 4px solid #e74c3c;">
-                        <span class="stat-icon">📦</span>
-                        <div class="stat-info">
-                            <span class="stat-value" id="total-costs" style="color:#e74c3c;">$0</span>
-                            <span class="stat-label">Costo Total</span>
-                        </div>
-                    </div>
-                    <div class="stat-card" style="border-left: 4px solid #27ae60;">
-                        <span class="stat-icon">📊</span>
-                        <div class="stat-info">
-                            <span class="stat-value" id="total-profit" style="color:#27ae60;">$0</span>
-                            <span class="stat-label">Ganancia Neta</span>
-                        </div>
-                    </div>
-                    <div class="stat-card" style="border-left: 4px solid #3498db;">
-                        <span class="stat-icon">📉</span>
-                        <div class="stat-info">
-                            <span class="stat-value" id="profit-margin">0%</span>
-                            <span class="stat-label">Margen</span>
-                        </div>
+            <div class="settings-card">
+                <h3>💰 Impuestos</h3>
+                <div class="form-group">
+                    <label>Tasa IVA (%)</label>
+                    <input type="number" id="setting-tax-rate" class="form-input" value="19">
+                </div>
+            </div>
+
+            <div class="settings-card">
+                <h3>🖨️ Impresión</h3>
+                <div class="form-group checkbox-group">
+                    <label>
+                        <input type="checkbox" id="setting-print-receipts" checked>
+                        Imprimir boletas automáticamente
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Mensaje en boleta</label>
+                    <textarea id="setting-receipt-footer" class="form-input" rows="2">¡Gracias por su compra!</textarea>
+                </div>
+            </div>
+
+            <div class="settings-card">
+                <h3>📱 Dispositivo</h3>
+                <div class="form-group">
+                    <label>ID Dispositivo</label>
+                    <input type="text" id="setting-device-id" class="form-input" readonly>
+                </div>
+                <div class="form-group checkbox-group">
+                    <label>
+                        <input type="checkbox" id="setting-offline-mode">
+                        Modo Offline
+                    </label>
+                </div>
+            </div>
+
+            <div class="settings-card">
+                <h3>📶 Bluetooth</h3>
+                <p class="text-muted mb-2">Conecta lectores de código de barras e impresoras térmicas.
+                </p>
+                <div class="bluetooth-devices" id="bluetooth-devices">
+                    <div class="bluetooth-status" id="bluetooth-status">
+                        <span class="status-indicator disconnected"></span>
+                        <span>Sin dispositivos conectados</span>
                     </div>
                 </div>
-
-                <div class="inventory-stats" id="inventory-stats" style="margin-bottom: 20px;">
-                    <div class="stat-card clickable" onclick="Inventory.openLowStockModal()">
-                        <span class="stat-icon">⚠️</span>
-                        <div class="stat-info">
-                            <span class="stat-value" id="low-stock-count">0</span>
-                            <span class="stat-label">Stock Bajo (Ver Lista)</span>
-                        </div>
-                    </div>
-                    <div class="stat-card clickable" onclick="Sales.openItemsSoldModal()">
-                        <span class="stat-icon">🛒</span>
-                        <div class="stat-info">
-                            <span class="stat-value" id="total-items-sold">0</span>
-                            <span class="stat-label">Items Vendidos (Ver Lista)</span>
-                        </div>
-                    </div>
+                <div class="form-actions mt-2">
+                    <button class="btn btn-secondary" id="scan-bluetooth">🔍 Buscar
+                        Dispositivos</button>
+                    <button class="btn btn-secondary" id="test-print">🖨️ Imprimir Prueba</button>
                 </div>
+            </div>
 
-                <!-- Charts (Kept as visual aid) -->
-                <div class="inventory-grid" style="margin-bottom: 20px;">
-                    <div class="inventory-card chart-card" style="width:100%">
-                        <h3>🏆 Top Productos</h3>
-                        <canvas id="top-products-chart" width="400" height="200"></canvas>
-                    </div>
-                </div>
-            </section>
+            <div class="settings-card safety-zone">
+                <h3>⚠️ Zona de Peligro</h3>
+                <p class="text-muted mb-2">Elimina todas las ventas y movimientos de inventario. No afecta
+                    productos ni usuarios.</p>
+                <button class="btn btn-danger" id="btn-reset-data" style="width:100%">🗑️
+                    Borrar Historial de Ventas</button>
+            </div>
 
-            <!-- Daily Sales Section (Common User) -->
-            <section id="daily-sales-section" class="section">
-                <div class="section-header">
-                    <h1>📅 Ventas del Día</h1>
-                    <div class="header-actions">
-                        <button class="btn btn-secondary" onclick="Sales.loadDailySales()">↻ Actualizar</button>
-                    </div>
-                </div>
-                <div class="table-container">
-                    <table class="data-table" id="daily-sales-table">
-                        <thead>
-                            <tr>
-                                <th>Hora</th>
-                                <th>Folio</th>
-                                <th>Detalle</th>
-                                <th>Total</th>
-                                <th>Método</th>
-                                <th>Acción</th>
-                            </tr>
-                        </thead>
-                        <tbody id="daily-sales-tbody">
-                            <!-- Daily sales loaded here -->
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <!-- Customers Section -->
-            <section id="customers-section" class="section">
-                <div class="section-header">
-                    <h1>👥 Clientes</h1>
-                    <button class="btn btn-primary" id="add-customer-btn">+ Nuevo Cliente</button>
-                </div>
-                <div class="filters-bar">
-                    <input type="text" id="customers-search" placeholder="Buscar cliente..." class="search-input">
-                </div>
-                <div class="table-container">
-                    <table class="data-table" id="customers-table">
-                        <thead>
-                            <tr>
-                                <th>Nombre</th>
-                                <th>Teléfono</th>
-                                <th>Email</th>
-                                <th>Puntos</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="customers-tbody">
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <!-- Users Section -->
-            <section id="users-section" class="section">
-                <div class="section-header">
-                    <h1>👤 Usuarios</h1>
-                    <div class="header-actions">
-                        <span class="unsaved-indicator hidden" id="users-unsaved-indicator">⚠️ Cambios sin
-                            guardar</span>
-                        <button class="btn btn-success hidden" id="save-users-btn">💾 Guardar Cambios</button>
-                        <button class="btn btn-primary" id="add-user-btn">+ Nuevo Usuario</button>
-                    </div>
-                </div>
-                <div class="table-container">
-                    <table class="data-table" id="users-table">
-                        <thead>
-                            <tr>
-                                <th>Nombre</th>
-                                <th>Rol</th>
-                                <th>Estado</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="users-tbody">
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <!-- Settings Section -->
-            <section id="settings-section" class="section">
-                <div class="section-header">
-                    <h1>⚙️ Configuración</h1>
-                </div>
-                <div class="settings-container">
-                    <!-- System Status Card -->
-                    <div class="settings-card" style="border-left: 4px solid #10b981;">
-                        <h3>📡 Estado del Sistema</h3>
-                        <div class="system-status-grid"
-                            style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
-                            <div class="status-item">
-                                <span class="text-xs text-muted">API Reference</span><br>
-                                <span id="status-firebase-sdk" style="font-weight: bold;">Checking...</span>
-                            </div>
-                            <div class="status-item">
-                                <span class="text-xs text-muted">Conexión Nube</span><br>
-                                <span id="status-connection" style="font-weight: bold;">Checking...</span>
-                            </div>
-                            <div class="status-item">
-                                <span class="text-xs text-muted">Cola Sincronización</span><br>
-                                <span id="status-queue" style="font-weight: bold;">0</span>
-                            </div>
-                            <div class="status-item">
-                                <span class="text-xs text-muted">Versión App</span><br>
-                                <span id="status-version" style="font-weight: bold;">v2.2.2</span>
-                            </div>
-                        </div>
-                        <button class="btn btn-secondary mt-3" id="btn-check-connection" style="width: 100%;">🔄
-                            Verificar Conexión</button>
-                    </div>
-                    <div class="settings-card">
-                        <h3>🏪 Datos del Negocio</h3>
-                        <div class="form-group">
-                            <label>Nombre del Negocio</label>
-                            <input type="text" id="setting-business-name" class="form-input">
-                        </div>
-                        <div class="form-group">
-                            <label>RUT</label>
-                            <input type="text" id="setting-rut" class="form-input" placeholder="12.345.678-9">
-                        </div>
-                        <div class="form-group">
-                            <label>Dirección</label>
-                            <input type="text" id="setting-address" class="form-input">
-                        </div>
-                        <div class="form-group">
-                            <label>Giro</label>
-                            <input type="text" id="setting-giro" class="form-input" placeholder="Venta de alimentos">
-                        </div>
-                    </div>
-
-                    <div class="settings-card">
-                        <h3>💰 Impuestos</h3>
-                        <div class="form-group">
-                            <label>Tasa IVA (%)</label>
-                            <input type="number" id="setting-tax-rate" class="form-input" value="19">
-                        </div>
-                    </div>
-
-                    <div class="settings-card">
-                        <h3>🖨️ Impresión</h3>
-                        <div class="form-group checkbox-group">
-                            <label>
-                                <input type="checkbox" id="setting-print-receipts" checked>
-                                Imprimir boletas automáticamente
-                            </label>
-                        </div>
-                        <div class="form-group">
-                            <label>Mensaje en boleta</label>
-                            <textarea id="setting-receipt-footer" class="form-input"
-                                rows="2">¡Gracias por su compra!</textarea>
-                        </div>
-                    </div>
-
-                    <div class="settings-card">
-                        <h3>📱 Dispositivo</h3>
-                        <div class="form-group">
-                            <label>ID Dispositivo</label>
-                            <input type="text" id="setting-device-id" class="form-input" readonly>
-                        </div>
-                        <div class="form-group checkbox-group">
-                            <label>
-                                <input type="checkbox" id="setting-offline-mode">
-                                Modo Offline
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="settings-card">
-                        <h3>📶 Bluetooth</h3>
-                        <p class="text-muted mb-2">Conecta lectores de código de barras e impresoras térmicas.
-                        </p>
-                        <div class="bluetooth-devices" id="bluetooth-devices">
-                            <div class="bluetooth-status" id="bluetooth-status">
-                                <span class="status-indicator disconnected"></span>
-                                <span>Sin dispositivos conectados</span>
-                            </div>
-                        </div>
-                        <div class="form-actions mt-2">
-                            <button class="btn btn-secondary" id="scan-bluetooth">🔍 Buscar
-                                Dispositivos</button>
-                            <button class="btn btn-secondary" id="test-print">🖨️ Imprimir Prueba</button>
-                        </div>
-                    </div>
-
-                    <div class="settings-card safety-zone">
-                        <h3>⚠️ Zona de Peligro</h3>
-                        <p class="text-muted mb-2">Elimina todas las ventas y movimientos de inventario. No afecta
-                            productos ni usuarios.</p>
-                        <button class="btn btn-danger" id="btn-reset-data" style="width:100%">🗑️
-                            Borrar Historial de Ventas</button>
-                    </div>
-
-                    <button class="btn btn-primary" id="save-settings">💾 Guardar Cambios</button>
-                </div>
-            </section>
-        </main>
+            <button class="btn btn-primary" id="save-settings">💾 Guardar Cambios</button>
+        </div>
+    </section>
+    </main>
     </div>
 
     <!-- Modals -->
