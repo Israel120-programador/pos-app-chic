@@ -2315,118 +2315,111 @@ body {
     /* App container should allow scrolling */
     .app-container {
         flex-direction: column;
-        height: auto;
-        min-height: 100vh;
-        overflow: visible;
+        height: 100vh;
+        /* Fixed height to contain internal scrolls */
+        overflow: hidden;
+        /* Prevent body scroll, use internal scrolls */
     }
 
     /* Sidebar becomes horizontal nav on mobile */
     .sidebar {
         width: 100%;
         flex-direction: row;
-        flex-wrap: wrap;
+        flex: 0 0 auto;
+        /* Fixed height, don't grow */
         border-right: none;
         border-bottom: 1px solid var(--border-color);
-        position: sticky;
-        top: 0;
+        position: relative;
+        /* Not sticky, part of flow */
         z-index: 100;
         background: var(--bg-secondary);
     }
 
-    .sidebar-header {
-        padding: var(--spacing-sm) var(--spacing-md);
-        border-bottom: none;
-    }
+    /* ... sidebar contents ... */
 
-    .nav-menu {
-        display: flex;
-        flex-wrap: wrap;
-        padding: var(--spacing-xs);
-        gap: var(--spacing-xs);
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    .nav-item {
-        padding: var(--spacing-sm);
-        margin-bottom: 0;
-    }
-
-    .nav-text {
-        display: none;
-    }
-
-    .nav-icon {
-        font-size: 18px;
-    }
-
-    .sidebar-footer {
-        display: none;
-    }
-
-    /* Main content should scroll */
+    /* Main content container */
     .main-content {
         flex: 1;
-        overflow: visible;
+        overflow: hidden;
+        /* Contains the section scrolls */
+        display: flex;
+        flex-direction: column;
+        position: relative;
+    }
+
+    /* Sections take full height of main-content */
+    .section {
+        height: 100%;
+        overflow-y: auto;
+        /* Internal scroll */
+        -webkit-overflow-scrolling: touch;
+        padding: var(--spacing-sm);
+        padding-bottom: 80px;
+        /* Space for bottom actions */
+    }
+
+    /* POS specific mobile layout */
+    .pos-container {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+    }
+
+    .pos-products {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
         min-height: 0;
     }
 
-    /* Sections should scroll */
-    .section {
-        overflow: visible;
+    .products-grid {
+        flex: 1;
         overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-        height: auto;
-        min-height: calc(100vh - 80px);
-        padding: var(--spacing-md);
+        padding-bottom: var(--spacing-md);
     }
 
-    .section.active {
-        display: block;
-    }
-
-    /* POS container vertical layout on mobile */
+    /* Cart fixed at bottom or scrollable? User wants "scrolear bien".
+       Let's leave cart at bottom of flow but ensure products scroll above it.
+       Actually, on mobile, Cart is usually below products.
+       If we want "scroll well", we should let .pos-container scroll as one unit
+       OR keep products scrollable and cart fixed.
+       
+       Feedback "se corrio todo hacia abajo" suggests unexpected top margin.
+       Let's reset margins.
+    */
     .pos-container {
-        flex-direction: column;
-        overflow: visible;
-        height: auto;
+        display: block;
+        /* Normal block flow */
+        overflow-y: auto;
+        /* Scroll entire POS area */
+        height: 100%;
     }
 
     .pos-products {
         overflow: visible;
-        min-height: 300px;
+        /* Let it flow */
+        height: auto;
     }
 
-    .products-grid {
-        overflow: visible;
-        max-height: none;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    /* Cart at bottom on mobile */
+    /* Ensure cart is visible at bottom */
     .pos-cart {
-        width: 100%;
-        max-height: none;
-        overflow: visible;
         margin-top: var(--spacing-md);
-    }
-
-    .cart-items {
-        max-height: 250px;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    /* Tables should scroll horizontally */
-    .table-container {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
+        padding-bottom: var(--spacing-xl);
     }
 
     /* Section header wrap */
     .section-header {
         flex-direction: column;
         align-items: flex-start;
+        margin-top: 0;
+        /* Fix shift */
+        padding-top: 0;
+    }
+
+    .section h1 {
+        margin-top: 0;
     }
 
     /* Settings container scroll */
